@@ -23,9 +23,10 @@ find_package(sensor_msgs REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(pcl_msgs REQUIRED)
 find_package(PCL REQUIRED COMPONENTS common io filters visualization)
+find_package(nav_msgs REQUIRED)
 
 add_executable(get_pointclouds_node src/node.cpp)
-ament_target_dependencies(get_pointclouds_node rclcpp sensor_msgs pcl_conversions)
+ament_target_dependencies(get_pointclouds_node rclcpp sensor_msgs pcl_conversions nav_msgs)
 
 target_include_directories(get_pointclouds_node PUBLIC ${PCL_INCLUDE_DIRS})
 add_definitions(${PCL_DEFINITIONS})

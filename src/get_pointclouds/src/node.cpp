@@ -10,6 +10,8 @@
 #include <pcl/point_types.h>
 #include <pcl/visualization/cloud_viewer.h>
 #include <pcl/filters/voxel_grid.h>
+#include "nav_msgs/msg/odometry.hpp"
+#include <pcl/io/pcd_io.h>
 
 // Usamos std::chrono para definir tiempos (ms, s)
 using namespace std::chrono_literals;
@@ -35,31 +37,67 @@ public:
     PclSubNode() : Node("sub_pcl") {
         subscription_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
             "/camera/depth/points", 10, 
-            std::bind(&PclSubNode::callback, this, std::placeholders::_1));  // 10 es el n�mero de mensajes que se guardan en la cola
+            std::bind(&PclSubNode::callback, this, std::placeholders::_1));  // 10 es el número de mensajes que se guardan en la cola
+        odometrySub = this->create_subscription<nav_msgs::msg::Odometry>(
+            "/odom", 1, 
+            std::bind(&PclSubNode::callback_odom, this, std::placeholders::_1));
     }
 
 private:
-    void callback(const sensor_msgs::msg::PointCloud2::SharedPtr msg) const {
-        pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>); // Creamos una nube de puntos vac�a
+    void callback(const sensor_msgs::msg::PointCloud2::SharedPtr msg) { // Aquí he quitado const
+
+        if(hacer_toma){
+            pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>); // Creamos una nube de puntos vacía
         
-        // Convertimos el mensaje de ROS a formato que entiende la librer�a pcl, y lo guarda en cloud antes de suscribirse
-        pcl::fromROSMsg(*msg, *cloud);
+            // Convertimos el mensaje de ROS a formato que entiende la librería pcl, y lo guarda en cloud antes de suscribirse
+            pcl::fromROSMsg(*msg, *cloud);
 
-        pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZRGB>); //Creamos otra nube de puntos vac�a
+            pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZRGB>); //Creamos otra nube de puntos vacía
 
-        std::cout << "Puntos capturados: " << cloud->size() << std::endl;
+            std::cout << "Puntos capturados: " << cloud->size() << std::endl;
 
-        pcl::VoxelGrid<pcl::PointXYZRGB> vGrid; // Creamos un objeto VoxelGrid, para el tipo de punto XYZRGB
-        vGrid.setInputCloud(cloud); // Le metemos la nube de puntos
-        vGrid.setLeafSize(0.05f, 0.05f, 0.05f); // Divide en cubos de 5x5x5 cm
-        vGrid.filter(*cloud_filtered);  // Aplicamos el filtro a cloud y lo guardamos en cloud_filtered
+            pcl::VoxelGrid<pcl::PointXYZRGB> vGrid; // Creamos un objeto VoxelGrid, para el tipo de punto XYZRGB
+            vGrid.setInputCloud(cloud); // Le metemos la nube de puntos
+            vGrid.setLeafSize(0.05f, 0.05f, 0.05f); // Divide en cubos de 5x5x5 cm
+            vGrid.filter(*cloud_filtered);  // Aplicamos el filtro a cloud y lo guardamos en cloud_filtered
 
-        std::cout << "Puntos tras VG: " << cloud_filtered->size() << std::endl;
+            std::cout << "Puntos tras VG: " << cloud_filtered->size() << std::endl;
 
-        visu_pc = cloud_filtered;  // Se asigna al visualizador la nube de puntos filtrada, para que lo muestre el hilo del visualizador
+            visu_pc = cloud_filtered;  // Se asigna al visualizador la nube de puntos filtrada, para que lo muestre el hilo del visualizador
+
+            std::string nombre = "nubes/scenes/toma_" + std::to_string(numero_toma) + ".pcd";
+            pcl::io::savePCDFileASCII(nombre, *cloud_filtered);
+
+            std::cout << "Toma " << numero_toma << " guardada" << std::endl;
+            numero_toma++;
+            hacer_toma = false;
+        }
+        
+    }
+
+    void callback_odom(const nav_msgs::msg::Odometry::SharedPtr msg) {
+        double q_z = msg->pose.pose.orientation.z;
+        double q_w = msg->pose.pose.orientation.w;
+        double angle = 2 * atan2(q_z, q_w);
+        RCLCPP_INFO_STREAM_THROTTLE(this->get_logger(), *this->get_clock(),
+        2000,
+        "Odometry -> x: " << msg->pose.pose.position.x <<
+        " | y: " << msg->pose.pose.position.y <<
+        " | ang: " << angle);
+
+        // Normalizamos el ángulo con trigonometría porque en ROS2 los ángulos van de -pi a pi (-180 a 180)
+        double distancia_giro = abs(atan2(sin(angle - angulo_ultima_toma), cos(angle - angulo_ultima_toma)));
+        if(distancia_giro >= 0.174){ // 0.174 en radianes son 10 grados
+            hacer_toma = true;
+            angulo_ultima_toma = angle;
+        }
     }
 
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr subscription_;
+    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odometrySub;
+    bool hacer_toma = true;
+    double angulo_ultima_toma = 0.0;
+    int numero_toma = 0;
 };
 
 int main(int argc, char** argv) {
