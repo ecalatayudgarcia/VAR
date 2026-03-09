@@ -130,6 +130,9 @@ int main(int argc, char** argv) {
 
 // ros2 run get_pointclouds get_pointclouds_node
 
+//PAra ejecutar el detector de keypoints: (una vez sacados los puntos en src/nubes/scenes)
+// ros2 run get_pointclouds iss
+
 // Ver si la cámara está publicando: ros2 topic list, Ver nodos vivos: ros2 node list
 
 /* Cada vez que se añada una librería nueva, como la de odometría, se tiene que:

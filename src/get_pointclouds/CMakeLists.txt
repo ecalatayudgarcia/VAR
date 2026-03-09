@@ -22,17 +22,26 @@ find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(pcl_msgs REQUIRED)
-find_package(PCL REQUIRED COMPONENTS common io filters visualization)
+find_package(PCL REQUIRED COMPONENTS common io filters visualization features search)
 find_package(nav_msgs REQUIRED)
 
 add_executable(get_pointclouds_node src/node.cpp)
 ament_target_dependencies(get_pointclouds_node rclcpp sensor_msgs pcl_conversions nav_msgs)
 
+
+add_executable(iss src/iss.cpp)
+# Le decimos dónde están los archivos de cabecera de PCL
+target_include_directories(iss PUBLIC ${PCL_INCLUDE_DIRS})
+# Enlazamos las librerías matemáticas de PCL para que pueda compilar
+target_link_libraries(iss ${PCL_LIBRARIES})
+
 target_include_directories(get_pointclouds_node PUBLIC ${PCL_INCLUDE_DIRS})
 add_definitions(${PCL_DEFINITIONS})
 target_link_libraries(get_pointclouds_node ${PCL_LIBRARIES})
 
-install(TARGETS get_pointclouds_node
+install(TARGETS 
+  get_pointclouds_node
+  iss
   DESTINATION lib/${PROJECT_NAME}
 )
 
