@@ -65,7 +65,7 @@ private:
 
             visu_pc = cloud_filtered;  // Se asigna al visualizador la nube de puntos filtrada, para que lo muestre el hilo del visualizador
 
-            std::string nombre = "nubes/scenes/toma_" + std::to_string(numero_toma) + ".pcd";
+            std::string nombre = "/home/ros2_ws/src/nubes/scenes/toma_" + std::to_string(numero_toma) + ".pcd";
             pcl::io::savePCDFileASCII(nombre, *cloud_filtered);
 
             std::cout << "Toma " << numero_toma << " guardada" << std::endl;
@@ -128,7 +128,7 @@ int main(int argc, char** argv) {
 
 // ros2 run teleop_twist_keyboard teleop_twist_keyboard
 
-// ros2 run get_pointclouds get_pointclouds
+// ros2 run get_pointclouds get_pointclouds_node
 
 // Ver si la cámara está publicando: ros2 topic list, Ver nodos vivos: ros2 node list
 
