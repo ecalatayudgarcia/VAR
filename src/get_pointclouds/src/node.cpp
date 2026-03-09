@@ -113,3 +113,26 @@ int main(int argc, char** argv) {
     t.join();
     return 0;
 }
+
+// docker compose -f docker-compose_nvidia.yml up -d
+
+// xhost +local:docker
+
+// docker exec -it var_container_gpu bash
+
+// colcon build --packages-select get_pointclouds  Cada vez que se haga un cambio se compila el paquete
+
+// source install/setup.bash Cada vez que se hace un cambio para refrescar la terminal (recarga rutas)
+
+// ros2 launch turtlebot_gazebo_multiple create_multi_robot.launch.py
+
+// ros2 run teleop_twist_keyboard teleop_twist_keyboard
+
+// ros2 run get_pointclouds get_pointclouds
+
+// Ver si la cámara está publicando: ros2 topic list, Ver nodos vivos: ros2 node list
+
+/* Cada vez que se añada una librería nueva, como la de odometría, se tiene que:
+    - Añadir como find_package(nav_msgs REQUIRED) en el CMakeLists.txt
+    - Enlazar la dependencia (conecta ejecutable con las librerías) en ament_target_dependencies (añadimos ahí nav_msgs)
+    - Actualizamos el package.xml, añadiendo el DNI del paquete así: <depend>nav_msgs</depend>*/ 
