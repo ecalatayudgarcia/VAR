@@ -10,6 +10,9 @@
 #include <pcl/point_types.h>
 #include <pcl/visualization/cloud_viewer.h>
 #include <pcl/filters/voxel_grid.h>
+#include <pcl/filters/filter.h>
+#include <pcl/search/kdtree.h>         
+#include <pcl/features/normal_3d.h>
 #include "nav_msgs/msg/odometry.hpp"
 #include <pcl/io/pcd_io.h>
 
@@ -52,17 +55,23 @@ private:
             // Convertimos el mensaje de ROS a formato que entiende la librería pcl, y lo guarda en cloud antes de suscribirse
             pcl::fromROSMsg(*msg, *cloud);
 
-            pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZRGB>); //Creamos otra nube de puntos vacía
-
             std::cout << "Puntos capturados: " << cloud->size() << std::endl;
 
+            pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_no_nan(new pcl::PointCloud<pcl::PointXYZRGB>);
+            std::vector<int> indices; // Guarda los índices de los puntos válidos (lo pide la función)
+            pcl::removeNaNFromPointCloud(*cloud, *cloud_no_nan, indices);
+
+            std::cout << "Puntos tras eliminar NaN: " << cloud_no_nan->size() << std::endl;
+            
+            pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZRGB>); //Creamos otra nube de puntos vacía
             pcl::VoxelGrid<pcl::PointXYZRGB> vGrid; // Creamos un objeto VoxelGrid, para el tipo de punto XYZRGB
-            vGrid.setInputCloud(cloud); // Le metemos la nube de puntos
+            vGrid.setInputCloud(cloud_no_nan); // Le metemos la nube de puntos
             vGrid.setLeafSize(0.05f, 0.05f, 0.05f); // Divide en cubos de 5x5x5 cm
             vGrid.filter(*cloud_filtered);  // Aplicamos el filtro a cloud y lo guardamos en cloud_filtered
 
             std::cout << "Puntos tras VG: " << cloud_filtered->size() << std::endl;
 
+           
             visu_pc = cloud_filtered;  // Se asigna al visualizador la nube de puntos filtrada, para que lo muestre el hilo del visualizador
 
             std::string nombre = "/home/ros2_ws/src/nubes/scenes/toma_" + std::to_string(numero_toma) + ".pcd";
