@@ -9,6 +9,7 @@
 #include <pcl/registration/correspondence_estimation.h>
 #include <pcl/common/transforms.h>
 #include <pcl/registration/correspondence_rejection_sample_consensus.h>
+#include <pcl/registration/icp.h>
 
 int main() {
     // 1. Cargar la nube de puntos desde el disco
@@ -67,6 +68,12 @@ int main() {
     fpfh1.setSearchMethod(tree1_fpfh);
     fpfh1.setRadiusSearch(0.35);
     fpfh1.compute(*descriptores1);
+
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr mapa_global(new pcl::PointCloud<pcl::PointXYZRGB>());
+    *mapa_global = *cloud1_clean; 
+
+    // La matriz global empieza siendo la Identidad (sin movimiento)
+    Eigen::Matrix4f T_total = Eigen::Matrix4f::Identity();
 
     while(true){
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud2(new pcl::PointCloud<pcl::PointXYZRGB>);
@@ -151,8 +158,8 @@ int main() {
         pcl::CorrespondencesPtr correspondencias(new pcl::Correspondences);
         pcl::registration::CorrespondenceEstimation<pcl::FPFHSignature33, pcl::FPFHSignature33> matching;
 
-        matching.setInputSource(descriptores1);
-        matching.setInputTarget(descriptores2);
+        matching.setInputSource(descriptores2);
+        matching.setInputTarget(descriptores1);
 
         matching.determineReciprocalCorrespondences(*correspondencias);
         std::cout << "Correspondencias: " << correspondencias->size() << std::endl;
@@ -165,10 +172,10 @@ int main() {
         pcl::CorrespondencesPtr correspondencias_inliers(new pcl::Correspondences);
         
         pcl::registration::CorrespondenceRejectorSampleConsensus<pcl::PointXYZRGB> ransac;
-        ransac.setInputSource(keypoints1);
+        ransac.setInputSource(keypoints2);
         
         // OJO: Usamos keypoints2 normal, NO el que tiene el offset para visualizar
-        ransac.setInputTarget(keypoints2); 
+        ransac.setInputTarget(keypoints1); 
         
         // Le pasamos la lista de líneas locas iniciales
         ransac.setInputCorrespondences(correspondencias);
@@ -180,55 +187,58 @@ int main() {
         ransac.setMaximumIterations(10000); // Número de veces que intenta buscar la combinación perfecta
 
         ransac.getCorrespondences(*correspondencias_inliers);
-        
-        // Extraemos el premio gordo: La Matriz de Transformación (T)
-        Eigen::Matrix4f matriz_ransac = ransac.getBestTransformation();
 
         std::cout << "Lineas ANTES de RANSAC (Con Outliers): " << correspondencias->size() << std::endl;
         std::cout << "Lineas DESPUES de RANSAC (Solo Inliers): " << correspondencias_inliers->size() << std::endl;
-        std::cout << "Matriz de Transformacion Inicial (T):\n" << matriz_ransac << std::endl;
 
-        //////////////////
-        // VISUALIZADOR //
-        //////////////////
+        ///////////////////////////
+        // MATRIZ INICIAL (SVD) //
+        ///////////////////////////
 
-        // 1. Movemos la Toma 2 y sus Keypoints 2 metros hacia la derecha (Eje X)
-        pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud2_offset(new pcl::PointCloud<pcl::PointXYZRGB>);
-        pcl::PointCloud<pcl::PointXYZRGB>::Ptr keypoints2_offset(new pcl::PointCloud<pcl::PointXYZRGB>);
+        // ¡AQUÍ ESTÁ LA MAGIA! Calculamos el giro usando SOLO las líneas limpias
+        pcl::registration::TransformationEstimationSVD<pcl::PointXYZRGB, pcl::PointXYZRGB> estimador_svd;
+        Eigen::Matrix4f matriz_inicial_svd = Eigen::Matrix4f::Identity();
         
-        Eigen::Matrix4f offset = Eigen::Matrix4f::Identity();
-        offset(0, 3) = 5.0; // Sumamos 2.0 metros en el eje X
-        
-        pcl::transformPointCloud(*cloud2, *cloud2_offset, offset);
-        pcl::transformPointCloud(*keypoints2, *keypoints2_offset, offset);
+        // Si RANSAC no encontró al menos 3 líneas buenas, esto fallará. Le ponemos un seguro:
+        if (correspondencias_inliers->size() >= 3) {
+            estimador_svd.estimateRigidTransformation(*keypoints2, *keypoints1, *correspondencias_inliers, matriz_inicial_svd);
+            std::cout << "Matriz de Transformacion Inicial (SVD) calculada.\n";
+        } else {
+            std::cout << "¡CRÍTICO! RANSAC no encontró suficientes Inliers. Usando Identidad.\n";
+        }
 
-        // 2. Preparamos el visor (Una sola ventana)
-        pcl::visualization::PCLVisualizer::Ptr viewer_corr(new pcl::visualization::PCLVisualizer("Correspondencias (Lado a Lado)"));
-        viewer_corr->setBackgroundColor(0.05, 0.05, 0.05);
+        /////////
+        // ICP //
+        /////////
 
-        // 3. Pintamos las nubes (Toma 1 a la izquierda, Toma 2 desplazada a la derecha)
-        pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZRGB> c1_color(cloud1, 255, 255, 255);
-        pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZRGB> c2_color(cloud2_offset, 255, 120, 65);
-        viewer_corr->addPointCloud(cloud1, c1_color, "nube_1");
-        viewer_corr->addPointCloud(cloud2_offset, c2_color, "nube_2_offset");
+        pcl::IterativeClosestPoint<pcl::PointXYZRGB, pcl::PointXYZRGB> icp;
+        icp.setInputSource(cloud2_clean);
+        icp.setInputTarget(cloud1_clean);
+        icp.setMaxCorrespondenceDistance(0.15);
+        icp.setMaximumIterations(100);
+        icp.setTransformationEpsilon(1e-8);
+        icp.setEuclideanFitnessEpsilon(1e-2);
 
-        // 4. Pintamos los Keypoints
-        pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZRGB> kp1_color(keypoints1, 255, 0, 0);   // Rojos
-        pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZRGB> kp2_color(keypoints2_offset, 0, 255, 0);   // Verdes
-        viewer_corr->addPointCloud(keypoints1, kp1_color, "keypoints1");
-        viewer_corr->addPointCloud(keypoints2_offset, kp2_color, "keypoints2_offset");
-        viewer_corr->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 6, "keypoints1");
-        viewer_corr->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 6, "keypoints2_offset");
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr alineacion_temporal(new pcl::PointCloud<pcl::PointXYZRGB>());
+        icp.align(*alineacion_temporal, matriz_inicial_svd);
 
-        // 5. Dibujamos las líneas usando la nube 2 desplazada
-        viewer_corr->addCorrespondences<pcl::PointXYZRGB>(keypoints1, keypoints2_offset, *correspondencias_inliers, "lineas_correspondencia");
-        viewer_corr->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 0.0, 0.5, 1.0, "lineas_correspondencia");
-        viewer_corr->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_LINE_WIDTH, 2, "lineas_correspondencia");
+        if (icp.hasConverged()) {
+            std::cout << "ICP Convergió. Score: " << icp.getFitnessScore() << std::endl;
 
-        std::cout << "Mostrando correspondencias Lado a Lado. Cierra para continuar..." << std::endl;
+            // Esta matriz T_local ya incluye RANSAC + ICP (Es la T_i de la línea 7)
+            Eigen::Matrix4f T_local = icp.getFinalTransformation();
 
-        while (!viewer_corr->wasStopped()) {
-            viewer_corr->spinOnce(100);
+            // LÍNEA 8: T_T = T_T * T_i (Acumular el movimiento global)
+            T_total = T_total * T_local;
+
+            // LÍNEA 9: M = M U T_T(x_i+1) (Transformar la toma nueva a coordenadas globales y sumar)
+            pcl::PointCloud<pcl::PointXYZRGB>::Ptr nube_en_global(new pcl::PointCloud<pcl::PointXYZRGB>());
+            pcl::transformPointCloud(*cloud2_clean,*nube_en_global, T_total);
+
+            *mapa_global +=*nube_en_global;
+
+        } else {
+            std::cout << "ALERTA: ICP falló en esta toma." << std::endl;
         }
 
         toma++;
@@ -238,5 +248,33 @@ int main() {
         keypoints1 = keypoints2;
         descriptores1 = descriptores2;
     }
+
+    //////////////////
+    // VISUALIZADOR //
+    //////////////////
+
+    std::cout << "¡PROCESAMIENTO TERMINADO! Construyendo el mapa global..." << std::endl;
+    std::cout << "Puntos totales en el mapa: " << mapa_global->size() << std::endl;
+
+    // Guardamos el mapa en un archivo por si lo quieres usar después
+    pcl::io::savePCDFileBinary("/home/ros2_ws/src/nubes/scenes/MAPA_FINAL.pcd", *mapa_global);
+    std::cout << "Mapa guardado en disco como MAPA_FINAL.pcd" << std::endl;
+
+    // --- VISUALIZADOR DEL MAPA GLOBAL ---
+    pcl::visualization::PCLVisualizer::Ptr visor_mapa(new pcl::visualization::PCLVisualizer("Mapa 3D Completo"));
+    visor_mapa->setBackgroundColor(0.05, 0.05, 0.05);
+
+    // Pintamos el mapa con sus colores reales (si los tiene) o en blanco
+    pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZRGB> color_mapa(mapa_global, 200, 200, 200);
+    visor_mapa->addPointCloud<pcl::PointXYZRGB>(mapa_global, color_mapa, "nube_mapa_global");
+    visor_mapa->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 2, "nube_mapa_global");
+
+    // Añadimos un sistema de coordenadas (ejes XYZ) para ver dónde empezó el robot
+    visor_mapa->addCoordinateSystem(1.0);
+
+    while (!visor_mapa->wasStopped()) {
+        visor_mapa->spinOnce(100);
+    }
+
     return 0;
 }
