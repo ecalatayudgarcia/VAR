@@ -66,7 +66,7 @@ private:
             pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZRGB>); //Creamos otra nube de puntos vacía
             pcl::VoxelGrid<pcl::PointXYZRGB> vGrid; // Creamos un objeto VoxelGrid, para el tipo de punto XYZRGB
             vGrid.setInputCloud(cloud_no_nan); // Le metemos la nube de puntos
-            vGrid.setLeafSize(0.05f, 0.05f, 0.05f); // Divide en cubos de 5x5x5 cm
+            vGrid.setLeafSize(0.02f, 0.02f, 0.02f); // Divide en cubos de 5x5x5 cm
             vGrid.filter(*cloud_filtered);  // Aplicamos el filtro a cloud y lo guardamos en cloud_filtered
 
             std::cout << "Puntos tras VG: " << cloud_filtered->size() << std::endl;
@@ -139,7 +139,7 @@ int main(int argc, char** argv) {
 
 // ros2 run get_pointclouds get_pointclouds_node
 
-//PAra ejecutar el detector de keypoints: (una vez sacados los puntos en src/nubes/scenes)
+// Para ejecutar el detector de keypoints: (una vez sacados los puntos en src/nubes/scenes)
 // ros2 run get_pointclouds iss
 
 // Ver si la cámara está publicando: ros2 topic list, Ver nodos vivos: ros2 node list

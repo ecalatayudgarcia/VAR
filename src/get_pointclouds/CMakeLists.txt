@@ -22,7 +22,7 @@ find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(pcl_msgs REQUIRED)
-find_package(PCL REQUIRED COMPONENTS common io filters visualization features search)
+find_package(PCL REQUIRED COMPONENTS common io filters visualization features search registration)
 find_package(nav_msgs REQUIRED)
 
 add_executable(get_pointclouds_node src/node.cpp)
