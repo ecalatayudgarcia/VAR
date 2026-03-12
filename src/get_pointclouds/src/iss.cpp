@@ -258,8 +258,8 @@ void visualizarMapaFinal(pcl::PointCloud<pcl::PointXYZRGB>::Ptr& mapa_global){
     visor_mapa->setBackgroundColor(0.05, 0.05, 0.05);
 
     // Pintamos el mapa con sus colores reales (si los tiene) o en blanco
-    pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZRGB> color_mapa(mapa_global, 200, 200, 200);
-    visor_mapa->addPointCloud<pcl::PointXYZRGB>(mapa_global, color_mapa, "nube_mapa_global");
+    pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> rgb(mapa_global);
+    visor_mapa->addPointCloud<pcl::PointXYZRGB>(mapa_global, rgb, "nube_mapa_global");
     visor_mapa->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 2, "nube_mapa_global");
 
     // Añadimos un sistema de coordenadas (ejes XYZ) para ver dónde empezó el robot
