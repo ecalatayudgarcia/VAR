@@ -10,6 +10,7 @@
 #include <pcl/common/transforms.h>
 #include <pcl/registration/correspondence_rejection_sample_consensus.h>
 #include <pcl/registration/icp.h>
+#include <pcl/console/print.h>
 
 void visualizarMapaFinal(pcl::PointCloud<pcl::PointXYZRGB>::Ptr&);
 void visualizarMatchings(pcl::PointCloud<pcl::PointXYZRGB>::Ptr& , pcl::PointCloud<pcl::PointXYZRGB>::Ptr& , pcl::PointCloud<pcl::PointXYZRGB>::Ptr& , pcl::PointCloud<pcl::PointXYZRGB>::Ptr& , pcl::CorrespondencesPtr&);
@@ -18,6 +19,7 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr iss(pcl::PointCloud<pcl::PointXYZRGB>::Pt
 pcl::PointCloud<pcl::FPFHSignature33>::Ptr descriptoresFPFH(pcl::PointCloud<pcl::PointXYZRGB>::Ptr&, pcl::PointCloud<pcl::Normal>::Ptr&, pcl::PointCloud<pcl::PointXYZRGB>::Ptr&);
 
 int main() {
+    pcl::console::setVerbosityLevel(pcl::console::L_ERROR);
     int toma = 0;
     std::string filename1 = "/home/ros2_ws/src/nubes/scenes/toma_" + std::to_string(toma) + ".pcd";
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud1(new pcl::PointCloud<pcl::PointXYZRGB>);
@@ -83,8 +85,8 @@ int main() {
         pcl::CorrespondencesPtr correspondencias(new pcl::Correspondences);
         pcl::registration::CorrespondenceEstimation<pcl::FPFHSignature33, pcl::FPFHSignature33> matching;
 
-        matching.setInputSource(descriptores1);
-        matching.setInputTarget(descriptores2);
+        matching.setInputSource(descriptores2);
+        matching.setInputTarget(descriptores1);
 
         matching.determineReciprocalCorrespondences(*correspondencias);
         std::cout << "Correspondencias: " << correspondencias->size() << std::endl;
@@ -95,8 +97,8 @@ int main() {
 
         pcl::CorrespondencesPtr correspondencias_inliers(new pcl::Correspondences);
         pcl::registration::CorrespondenceRejectorSampleConsensus<pcl::PointXYZRGB> ransac;
-        ransac.setInputSource(keypoints1);
-        ransac.setInputTarget(keypoints2); 
+        ransac.setInputSource(keypoints2);
+        ransac.setInputTarget(keypoints1); 
         ransac.setInputCorrespondences(correspondencias);
         ransac.setInlierThreshold(0.15); 
         ransac.setMaximumIterations(10000); // Número de veces que intenta buscar la combinación perfecta
@@ -105,10 +107,10 @@ int main() {
         std::cout << "Lineas ANTES de RANSAC (Con Outliers): " << correspondencias->size() << std::endl;
         std::cout << "Lineas DESPUES de RANSAC (Solo Inliers): " << correspondencias_inliers->size() << std::endl;
 
-        /////////////////////////////
-        // VISUALIZADOR MATCHINGS //
-        ////////////////////////////
-        visualizarMatchings(cloud1, cloud2, keypoints1,  keypoints2, correspondencias_inliers);
+        ///////////////////////////////////////////////////////////////////////////////////
+        // VISUALIZADOR MATCHINGS COMENTAR ESTO PARA VER DIRECTAMENTE EL RESULTADO FINAL //
+        ///////////////////////////////////////////////////////////////////////////////////
+        //visualizarMatchings(cloud1, cloud2, keypoints1,  keypoints2, correspondencias_inliers);
 
         ///////////////////////////
         // MATRIZ INICIAL (SVD) //
@@ -121,7 +123,12 @@ int main() {
         // Si RANSAC no encontró al menos 3 líneas buenas, esto fallará. Le ponemos un seguro:
         if (correspondencias_inliers->size() >= 3) {
             estimador_svd.estimateRigidTransformation(*keypoints2, *keypoints1, *correspondencias_inliers, matriz_inicial_svd);
-            std::cout << "Matriz de Transformacion Inicial (SVD) calculada.\n";
+            if (matriz_inicial_svd.hasNaN()) {
+                std::cout << "¡ALERTA! SVD genero una matriz corrupta (NaN). Forzando Identidad." << std::endl;
+                matriz_inicial_svd = Eigen::Matrix4f::Identity();
+            } else {
+                std::cout << "Matriz de Transformacion Inicial (SVD) calculada con exito.\n";
+            }
         } else {
             std::cout << "¡CRÍTICO! RANSAC no encontró suficientes Inliers. Usando Identidad.\n";
         }
@@ -131,9 +138,9 @@ int main() {
         /////////
 
         pcl::IterativeClosestPoint<pcl::PointXYZRGB, pcl::PointXYZRGB> icp;
-        icp.setInputSource(cloud1_clean);
-        icp.setInputTarget(cloud2_clean);
-        icp.setMaxCorrespondenceDistance(0.15);
+        icp.setInputSource(cloud2_clean);
+        icp.setInputTarget(cloud1_clean);
+        icp.setMaxCorrespondenceDistance(0.20);
         icp.setMaximumIterations(100);
         icp.setTransformationEpsilon(1e-8);
         icp.setEuclideanFitnessEpsilon(1e-2);
@@ -143,14 +150,23 @@ int main() {
 
         if (icp.hasConverged()) {
             std::cout << "ICP Convergió. Score: " << icp.getFitnessScore() << std::endl;
-
-            // Esta matriz T_local ya incluye RANSAC + ICP (Es la T_i de la línea 7)
             Eigen::Matrix4f T_local = icp.getFinalTransformation();
+            Eigen::Affine3f affine(T_local);
+            float tx, ty, tz, rot_x, rot_y, rot_z;
+            pcl::getTranslationAndEulerAngles(affine, tx, ty, tz, rot_x, rot_y, rot_z);
 
-            // LÍNEA 8: T_T = T_T * T_i (Acumular el movimiento global)
+            // Anulamos movimientos imposibles para el Turtlebot SOLO TIENE UN GRADO DE LIBERTAD (ROTAR EN y)
+            tx = 0.0; // No se desliza de lado
+            ty = 0.0; // No vuela ni se hunde
+            tz = 0.0; // No avanza ni retrocede
+            rot_x = 0.0; // No mira hacia arriba/abajo (Cabeceo)
+            rot_z = 0.0; // No ladea la cabeza (Alabeo)
+
+            // Reconstruimos la matriz limpia
+            Eigen::Affine3f affine_limpio = pcl::getTransformation(tx, ty, tz, rot_x, rot_y, rot_z);
+            T_local = affine_limpio.matrix();
+ 
             T_total = T_total * T_local;
-
-            // LÍNEA 9: M = M U T_T(x_i+1) (Transformar la toma nueva a coordenadas globales y sumar)
             pcl::PointCloud<pcl::PointXYZRGB>::Ptr nube_en_global(new pcl::PointCloud<pcl::PointXYZRGB>());
             pcl::transformPointCloud(*cloud2_clean,*nube_en_global, T_total);
 
@@ -185,7 +201,7 @@ pcl::PointCloud<pcl::FPFHSignature33>::Ptr descriptoresFPFH(pcl::PointCloud<pcl:
 
     pcl::search::KdTree<pcl::PointXYZRGB>::Ptr tree1_fpfh (new pcl::search::KdTree<pcl::PointXYZRGB> ());
     fpfh1.setSearchMethod(tree1_fpfh);
-    fpfh1.setRadiusSearch(0.35);
+    fpfh1.setRadiusSearch(0.15);
     fpfh1.compute(*descriptores);
     return descriptores;
 }
@@ -195,11 +211,11 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr iss(pcl::PointCloud<pcl::PointXYZRGB>::Pt
     pcl::search::KdTree<pcl::PointXYZRGB>::Ptr tree_iss (new pcl::search::KdTree<pcl::PointXYZRGB> ());
     pcl::ISSKeypoint3D<pcl::PointXYZRGB, pcl::PointXYZRGB> iss_detector;
     iss_detector.setSearchMethod (tree_iss);
-    iss_detector.setSalientRadius (0.30);
-    iss_detector.setNonMaxRadius (0.25);
+    iss_detector.setSalientRadius (0.10);
+    iss_detector.setNonMaxRadius (0.05);
     iss_detector.setThreshold21 (0.8);
     iss_detector.setThreshold32 (0.8);
-    iss_detector.setMinNeighbors (10);
+    iss_detector.setMinNeighbors (5);
     iss_detector.setNumberOfThreads (4);
     iss_detector.setInputCloud (cloud);
     iss_detector.compute (*keypoints);
@@ -212,7 +228,7 @@ void preprocesar(pcl::PointCloud<pcl::PointXYZRGB>::Ptr& cloud, pcl::PointCloud<
     pcl::PointCloud<pcl::Normal>::Ptr cloud_normals(new pcl::PointCloud<pcl::Normal>());
     ne.setSearchMethod(tree1_n);
     ne.setInputCloud(cloud);
-    ne.setRadiusSearch(0.15); //Radio en el que buscar vecinos
+    ne.setRadiusSearch(0.06); //Radio en el que buscar vecinos
     ne.compute(*cloud_normals);
     // Recorremos las normales calculadas
     for (std::size_t i = 0; i < cloud_normals->size(); ++i) {
