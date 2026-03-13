@@ -88,6 +88,9 @@ private:
         double q_z = msg->pose.pose.orientation.z;
         double q_w = msg->pose.pose.orientation.w;
         double angle = 2 * atan2(q_z, q_w);
+        double current_x = msg->pose.pose.position.x;
+        double current_y = msg->pose.pose.position.y;
+        
         RCLCPP_INFO_STREAM_THROTTLE(this->get_logger(), *this->get_clock(),
         2000,
         "Odometry -> x: " << msg->pose.pose.position.x <<
@@ -96,9 +99,13 @@ private:
 
         // Normalizamos el ángulo con trigonometría porque en ROS2 los ángulos van de -pi a pi (-180 a 180)
         double distancia_giro = abs(atan2(sin(angle - angulo_ultima_toma), cos(angle - angulo_ultima_toma)));
-        if(distancia_giro >= 0.174){ // 0.174 en radianes son 10 grados
+        double distancia_avance = std::sqrt(std::pow(current_x - x_ultima_toma, 2) + std::pow(current_y - y_ultima_toma, 2));
+        if(distancia_giro >= 0.174 || distancia_avance >= 0.5){ // 0.174 en radianes son 10 grados
             hacer_toma = true;
             angulo_ultima_toma = angle;
+            x_ultima_toma = current_x;
+            y_ultima_toma = current_y;
+            RCLCPP_INFO(this->get_logger(), "Toma capturada por movimiento.");
         }
     }
 
@@ -107,6 +114,8 @@ private:
     bool hacer_toma = true;
     double angulo_ultima_toma = 0.0;
     int numero_toma = 0;
+    double x_ultima_toma = 0.0;
+    double y_ultima_toma = 0.0;
 };
 
 int main(int argc, char** argv) {

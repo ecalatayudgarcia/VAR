@@ -150,7 +150,7 @@ int main() {
 
         if (icp.hasConverged()) {
             std::cout << "ICP Convergió. Score: " << icp.getFitnessScore() << std::endl;
-            Eigen::Matrix4f T_local = icp.getFinalTransformation();
+            Eigen::Matrix4f T_local = icp.getFinalTransformation(); // Matriz de transformación
             Eigen::Affine3f affine(T_local);
             float tx, ty, tz, rot_x, rot_y, rot_z;
             pcl::getTranslationAndEulerAngles(affine, tx, ty, tz, rot_x, rot_y, rot_z);
