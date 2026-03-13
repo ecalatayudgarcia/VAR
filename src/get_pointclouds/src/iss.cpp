@@ -156,9 +156,9 @@ int main() {
             pcl::getTranslationAndEulerAngles(affine, tx, ty, tz, rot_x, rot_y, rot_z);
 
             // Anulamos movimientos imposibles para el Turtlebot SOLO TIENE UN GRADO DE LIBERTAD (ROTAR EN y)
-            //tx = 0.0; // No se desliza de lado
+            tx = 0.0; // No se desliza de lado
             ty = 0.0; // No vuela ni se hunde
-            //tz = 0.0; // No avanza ni retrocede
+            tz = 0.0; // No avanza ni retrocede
             rot_x = 0.0; // No mira hacia arriba/abajo (Cabeceo)
             rot_z = 0.0; // No ladea la cabeza (Alabeo)
 
