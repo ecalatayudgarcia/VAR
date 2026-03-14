@@ -90,6 +90,15 @@ private:
         double angle = 2 * atan2(q_z, q_w);
         double current_x = msg->pose.pose.position.x;
         double current_y = msg->pose.pose.position.y;
+
+        if(primera_vez){
+            angulo_ultima_toma = angle;
+            x_ultima_toma = current_x;
+            y_ultima_toma = current_y;
+            primera_vez = false;
+            hacer_toma = true; // Hacemos la Toma 0 real
+            return; 
+        }
         
         RCLCPP_INFO_STREAM_THROTTLE(this->get_logger(), *this->get_clock(),
         2000,
@@ -116,6 +125,7 @@ private:
     int numero_toma = 0;
     double x_ultima_toma = 0.0;
     double y_ultima_toma = 0.0;
+    bool primera_vez = true;
 };
 
 int main(int argc, char** argv) {

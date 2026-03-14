@@ -22,15 +22,16 @@ int main() {
     pcl::console::setVerbosityLevel(pcl::console::L_ERROR);
     int toma = 0;
     std::string filename1 = "/home/ros2_ws/src/nubes/scenes/toma_" + std::to_string(toma) + ".pcd";
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud1(new pcl::PointCloud<pcl::PointXYZRGB>);
-    if (pcl::io::loadPCDFile<pcl::PointXYZRGB>(filename1, *cloud1) == -1) {
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud1(new pcl::PointCloud<pcl::PointXYZRGB>); // Creamos una nube vacía que contendrá la primera toma
+    if (pcl::io::loadPCDFile<pcl::PointXYZRGB>(filename1, *cloud1) == -1) { // Si intentamos guardar la toma y devuelve -1 es que no se ha detectado la toma
         std::cout << "No se ha detectado la toma: " << filename1 << std::endl;
         return 1;
     }
     
     //PREPROCESAR
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud1_clean(new pcl::PointCloud<pcl::PointXYZRGB>);
-    pcl::PointCloud<pcl::Normal>::Ptr normals1_clean(new pcl::PointCloud<pcl::Normal>);
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud1_clean(new pcl::PointCloud<pcl::PointXYZRGB>); // Creamos una nube de puntos vacía donde meteremos la nube limpia de normales NaN 
+    pcl::PointCloud<pcl::Normal>::Ptr normals1_clean(new pcl::PointCloud<pcl::Normal>); // Creamos una nube de de tipo Normal que contendrá las normales válidas
+
     preprocesar(cloud1, cloud1_clean, normals1_clean);
     
     //ISS
@@ -70,7 +71,7 @@ int main() {
         /// ISS KEYPOINTS DETECTOR ///
         //////////////////////////////
 
-        pcl::PointCloud<pcl::PointXYZRGB>::Ptr keypoints2 = iss(cloud2_clean);
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr keypoints2 = iss(cloud2_clean); // Nube vacía donde guardaremos los puntos clave
 
         //////////
         // FPFH //
@@ -110,68 +111,49 @@ int main() {
         ///////////////////////////////////////////////////////////////////////////////////
         // VISUALIZADOR MATCHINGS COMENTAR ESTO PARA VER DIRECTAMENTE EL RESULTADO FINAL //
         ///////////////////////////////////////////////////////////////////////////////////
-        //visualizarMatchings(cloud1, cloud2, keypoints1,  keypoints2, correspondencias_inliers);
+        visualizarMatchings(cloud1, cloud2, keypoints1,  keypoints2, correspondencias_inliers);
 
         ///////////////////////////
         // MATRIZ INICIAL (SVD) //
         ///////////////////////////
-
-        // ¡AQUÍ ESTÁ LA MAGIA! Calculamos el giro usando SOLO las líneas limpias
-        pcl::registration::TransformationEstimationSVD<pcl::PointXYZRGB, pcl::PointXYZRGB> estimador_svd;
         Eigen::Matrix4f matriz_inicial_svd = Eigen::Matrix4f::Identity();
         
-        // Si RANSAC no encontró al menos 3 líneas buenas, esto fallará. Le ponemos un seguro:
+        // Solo calculamos SVD si RANSAC dejó al menos 3 líneas sanas (el mínimo matemático)
         if (correspondencias_inliers->size() >= 3) {
+            pcl::registration::TransformationEstimationSVD<pcl::PointXYZRGB, pcl::PointXYZRGB> estimador_svd;
+            
+            // Esta función SÍ lee los índices de correspondencias_inliers. ¡Estaba bien hecha!
             estimador_svd.estimateRigidTransformation(*keypoints2, *keypoints1, *correspondencias_inliers, matriz_inicial_svd);
-            if (matriz_inicial_svd.hasNaN()) {
-                std::cout << "¡ALERTA! SVD genero una matriz corrupta (NaN). Forzando Identidad." << std::endl;
-                matriz_inicial_svd = Eigen::Matrix4f::Identity();
-            } else {
-                std::cout << "Matriz de Transformacion Inicial (SVD) calculada con exito.\n";
-            }
+            std::cout << "SVD calculada con exito." << std::endl;
         } else {
-            std::cout << "¡CRÍTICO! RANSAC no encontró suficientes Inliers. Usando Identidad.\n";
+            std::cout << "ALERTA: Muy pocos inliers (" << correspondencias_inliers->size() << "). El ICP tendra que hacerlo solo." << std::endl;
         }
 
         /////////
         // ICP //
         /////////
-
         pcl::IterativeClosestPoint<pcl::PointXYZRGB, pcl::PointXYZRGB> icp;
         icp.setInputSource(cloud2_clean);
         icp.setInputTarget(cloud1_clean);
-        icp.setMaxCorrespondenceDistance(0.20);
+        icp.setMaxCorrespondenceDistance(0.20); // 20 cm está genial si SVD hace su trabajo previo
         icp.setMaximumIterations(100);
         icp.setTransformationEpsilon(1e-8);
         icp.setEuclideanFitnessEpsilon(1e-2);
 
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr alineacion_temporal(new pcl::PointCloud<pcl::PointXYZRGB>());
+        
+        // ¡LE PASAMOS LA MATRIZ DEL SVD AL ICP!
         icp.align(*alineacion_temporal, matriz_inicial_svd);
 
         if (icp.hasConverged()) {
             std::cout << "ICP Convergió. Score: " << icp.getFitnessScore() << std::endl;
             Eigen::Matrix4f T_local = icp.getFinalTransformation(); // Matriz de transformación
-            Eigen::Affine3f affine(T_local);
-            float tx, ty, tz, rot_x, rot_y, rot_z;
-            pcl::getTranslationAndEulerAngles(affine, tx, ty, tz, rot_x, rot_y, rot_z);
-
-            // Anulamos movimientos imposibles para el Turtlebot SOLO TIENE UN GRADO DE LIBERTAD (ROTAR EN y)
-            tx = 0.0; // No se desliza de lado
-            ty = 0.0; // No vuela ni se hunde
-            tz = 0.0; // No avanza ni retrocede
-            rot_x = 0.0; // No mira hacia arriba/abajo (Cabeceo)
-            rot_z = 0.0; // No ladea la cabeza (Alabeo)
-
-            // Reconstruimos la matriz limpia
-            Eigen::Affine3f affine_limpio = pcl::getTransformation(tx, ty, tz, rot_x, rot_y, rot_z);
-            T_local = affine_limpio.matrix();
  
             T_total = T_total * T_local;
             pcl::PointCloud<pcl::PointXYZRGB>::Ptr nube_en_global(new pcl::PointCloud<pcl::PointXYZRGB>());
-            pcl::transformPointCloud(*cloud2_clean,*nube_en_global, T_total);
+            pcl::transformPointCloud(*cloud2_clean, *nube_en_global, T_total);
 
-            *mapa_global +=*nube_en_global;
-
+            *mapa_global += *nube_en_global;
         } else {
             std::cout << "ALERTA: ICP falló en esta toma." << std::endl;
         }
@@ -201,35 +183,43 @@ pcl::PointCloud<pcl::FPFHSignature33>::Ptr descriptoresFPFH(pcl::PointCloud<pcl:
 
     pcl::search::KdTree<pcl::PointXYZRGB>::Ptr tree1_fpfh (new pcl::search::KdTree<pcl::PointXYZRGB> ());
     fpfh1.setSearchMethod(tree1_fpfh);
-    fpfh1.setRadiusSearch(0.15);
+    fpfh1.setRadiusSearch(0.35);
     fpfh1.compute(*descriptores);
     return descriptores;
 }
 
+ /* El algoritmo ISS se basa en usar una matriz de dispersión donde aquellos puntos que tienen más vecinos tienen menos peso que los que tienen menos vecinos, de esta manera
+    si la cámara escanea la mesa, la pata más cerca de esta tendrá más puntos que la que está más lejos, por lo tanto, se le da menos peso a la que está más cerca para que 
+    no se piense que la pata más cerca es más voluminosa o que tiene una forma distinta, así el algoritmo se centra en la forma geométrica real*/
+
+    /*λ1​: Es el eje donde los puntos se esparcen más (el largo).
+      λ2​: Es la dispersión en el eje intermedio (el ancho).
+      λ3​: Es la dirección donde hay menos puntos (el grosor).*/
+
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr iss(pcl::PointCloud<pcl::PointXYZRGB>::Ptr& cloud){
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr keypoints(new pcl::PointCloud<pcl::PointXYZRGB>());
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr keypoints(new pcl::PointCloud<pcl::PointXYZRGB>()); // Nube vacía donde guardaremos los puntos clave
     pcl::search::KdTree<pcl::PointXYZRGB>::Ptr tree_iss (new pcl::search::KdTree<pcl::PointXYZRGB> ());
-    pcl::ISSKeypoint3D<pcl::PointXYZRGB, pcl::PointXYZRGB> iss_detector;
+    pcl::ISSKeypoint3D<pcl::PointXYZRGB, pcl::PointXYZRGB> iss_detector; // Invocamos el algoritmo ISS para usar sus métodos
     iss_detector.setSearchMethod (tree_iss);
-    iss_detector.setSalientRadius (0.10);
-    iss_detector.setNonMaxRadius (0.05);
-    iss_detector.setThreshold21 (0.8);
-    iss_detector.setThreshold32 (0.8);
-    iss_detector.setMinNeighbors (5);
-    iss_detector.setNumberOfThreads (4);
-    iss_detector.setInputCloud (cloud);
-    iss_detector.compute (*keypoints);
+    iss_detector.setSalientRadius (0.30); // Dibuja una esfera virtual de x centímetros de radio a su alrededor y ve como están distribuidos geométricamente los puntos que caen en esa esfera
+    iss_detector.setNonMaxRadius (0.2); // Supresión de no máximos: es para tener un keypoint limpio por cada esquina, borra el resto en un radio de x centímetros
+    iss_detector.setThreshold21 (0.5); // Si este ratio sale cerca de 1 el keypoint es malo, ya que largo y ancho son iguales, y hay peligro de simetría circular o cilíndrica
+    iss_detector.setThreshold32 (0.5); // Si sale cerca de 1 el ancho y grosor son iguales (forma de tubo cuadrado), si sale muy bajo, significa que no tiene nada de grosor comparado con su ancho, peligro de pared plana
+    iss_detector.setMinNeighbors (5); // Mínimo número de vecinos que tiene que tener, esto permite eliminar ruido
+    iss_detector.setNumberOfThreads (4); // Usar 4 núcleos a la vez para calcular
+    iss_detector.setInputCloud (cloud); // Le metemos la nube de puntos limpia de normales inválidas
+    iss_detector.compute (*keypoints); // Metemos el cálculo en keypoints1
     return keypoints;
 }
 
 void preprocesar(pcl::PointCloud<pcl::PointXYZRGB>::Ptr& cloud, pcl::PointCloud<pcl::PointXYZRGB>::Ptr& cloud_clean,  pcl::PointCloud<pcl::Normal>::Ptr& normals_clean){
-    pcl::NormalEstimation<pcl::PointXYZRGB, pcl::Normal> ne; //Objeto de filtro normal
-    pcl::search::KdTree<pcl::PointXYZRGB>::Ptr tree1_n(new pcl::search::KdTree<pcl::PointXYZRGB>());
-    pcl::PointCloud<pcl::Normal>::Ptr cloud_normals(new pcl::PointCloud<pcl::Normal>());
-    ne.setSearchMethod(tree1_n);
-    ne.setInputCloud(cloud);
-    ne.setRadiusSearch(0.06); //Radio en el que buscar vecinos
-    ne.compute(*cloud_normals);
+    pcl::NormalEstimation<pcl::PointXYZRGB, pcl::Normal> ne; // Objeto de filtro normal para calcular las normales
+    pcl::search::KdTree<pcl::PointXYZRGB>::Ptr tree1_n(new pcl::search::KdTree<pcl::PointXYZRGB>()); // Para optimizar la búsqueda de vecinos de un punto
+    pcl::PointCloud<pcl::Normal>::Ptr cloud_normals(new pcl::PointCloud<pcl::Normal>()); // Creamos una nube vacía de tipo Normal
+    ne.setSearchMethod(tree1_n); // Decimos que como método de búsqueda utilice el KdTree
+    ne.setInputCloud(cloud); // Le metemos la nube de puntos
+    ne.setRadiusSearch(0.1); // Radio en el que buscar vecinos
+    ne.compute(*cloud_normals); // Calcula y lo guarda en cloud1_normals
     // Recorremos las normales calculadas
     for (std::size_t i = 0; i < cloud_normals->size(); ++i) {
         // Si la normal en X, Y o Z NO es NaN, el punto es válido
