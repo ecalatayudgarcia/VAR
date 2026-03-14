@@ -128,12 +128,14 @@ int main() {
         std::cout << "Lineas ANTES de RANSAC (Con Outliers): " << correspondencias->size() << std::endl;
         std::cout << "Lineas DESPUES de RANSAC (Solo Inliers): " << correspondencias_inliers->size() << std::endl;
 
+
         ///////////////////////////////////////////////////////////////////////////////////
         // VISUALIZADOR MATCHINGS COMENTAR ESTO PARA VER DIRECTAMENTE EL RESULTADO FINAL //
         ///////////////////////////////////////////////////////////////////////////////////
-        if(toma == 12){
+        if(toma == 19){
             visualizarMatchings(cloud1, cloud2, keypoints1,  keypoints2, correspondencias_inliers);
-        }
+
+        }   
 
         ///////////////////////////
         // MATRIZ INICIAL (SVD) //
@@ -146,7 +148,25 @@ int main() {
             
             // Esta función SÍ lee los índices de correspondencias_inliers. ¡Estaba bien hecha!
             estimador_svd.estimateRigidTransformation(*keypoints2, *keypoints1, *correspondencias_inliers, matriz_inicial_svd);
-            std::cout << "SVD calculada con exito." << std::endl;
+
+            // --- NUEVO: CONTROL DE CORDURA (SANITY CHECK) ---
+            // Calculamos cuánta distancia (traslación) nos dice el SVD que nos hemos movido
+            float tx = matriz_inicial_svd(0, 3);
+            float ty = matriz_inicial_svd(1, 3);
+            float tz = matriz_inicial_svd(2, 3);
+            float distancia_svd = std::sqrt(tx*tx + ty*ty + tz*tz);
+
+            // Si el SVD dice que nos hemos movido más de 30 cm de golpe, es un falso positivo por culpa de paredes lisas.
+            if (distancia_svd > 0.15) {
+                std::cout << "¡ALERTA CRÍTICA! SVD alucinado (Salto de " << distancia_svd << "m). Toma 100% corrupta. SALTANDO." << std::endl;
+                
+                // Actualizamos las variables para no quedarnos atascados, pero NO añadimos nada al mapa
+                Eigen::Affine3f giro_estimado = pcl::getTransformation(0, 0, 0, 0, 0.174, 0); // 0.174 rad = 10 grados
+                matriz_inicial_svd = giro_estimado.matrix();
+            } else {
+                std::cout << "SVD calculada con exito (Distancia lógica: " << distancia_svd << "m)." << std::endl;
+            }
+            // ------------------------------------------------
         } else {
             std::cout << "ALERTA: Muy pocos inliers (" << correspondencias_inliers->size() << "). El ICP tendra que hacerlo solo." << std::endl;
         }
@@ -170,30 +190,36 @@ int main() {
         if (icp.hasConverged()) {
             double score = icp.getFitnessScore();
             std::cout << "ICP Convergió. Score: " << score << std::endl;
-
-            if (score > 0.1) {
-                std::cout << "ALERTA: Score demasiado alto (" << score << "). Toma descartada." << std::endl;
-                toma++;
-                continue;
-            }
     
             Eigen::Matrix4f T_local = icp.getFinalTransformation(); 
+            Eigen::Affine3f affine(T_local);
+            float tx, ty, tz, rot_x, rot_y, rot_z;
+            pcl::getTranslationAndEulerAngles(affine, tx, ty, tz, rot_x, rot_y, rot_z);
+
+            // Dejamos tx, ty, tz libres para que la cámara haga su pequeño "arco" al girar.
+            // Pero MATAMOS las rotaciones raras para que el suelo no se doble.
+            rot_x = 0.0; 
+            rot_z = 0.0; 
+
+            // Reconstruimos la matriz limpia
+            Eigen::Affine3f affine_limpio = pcl::getTransformation(tx, ty, tz, rot_x, rot_y, rot_z);
+            T_local = affine_limpio.matrix();
  
             T_total = T_total * T_local;
             pcl::PointCloud<pcl::PointXYZRGB>::Ptr nube_en_global(new pcl::PointCloud<pcl::PointXYZRGB>());
             pcl::transformPointCloud(*cloud2_clean, *nube_en_global, T_total);
 
             *mapa_global += *nube_en_global;
+            cloud1 = cloud2;
+            cloud1_clean = cloud2_clean;
+            normals1_clean = normals2_clean;
+            keypoints1 = keypoints2;
+            descriptores1 = descriptores2;
         } else {
             std::cout << "ALERTA: ICP falló en esta toma." << std::endl;
         }
 
         toma++; 
-        cloud1 = cloud2;
-        cloud1_clean = cloud2_clean;
-        normals1_clean = normals2_clean;
-        keypoints1 = keypoints2;
-        descriptores1 = descriptores2;
     }
 
     //////////////////////////////////////
@@ -233,8 +259,8 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr iss(pcl::PointCloud<pcl::PointXYZRGB>::Pt
     iss_detector.setSearchMethod (tree_iss);
     iss_detector.setSalientRadius (0.25); // Dibuja una esfera virtual de x centímetros de radio a su alrededor y ve como están distribuidos geométricamente los puntos que caen en esa esfera
     iss_detector.setNonMaxRadius (0.12); // Supresión de no máximos: es para tener un keypoint limpio por cada esquina, borra el resto en un radio de x centímetros
-    iss_detector.setThreshold21 (0.75); // Si este ratio sale cerca de 1 el keypoint es malo, ya que largo y ancho son iguales, y hay peligro de simetría circular o cilíndrica
-    iss_detector.setThreshold32 (0.75); // Si sale cerca de 1 el ancho y grosor son iguales (forma de tubo cuadrado), si sale muy bajo, significa que no tiene nada de grosor comparado con su ancho, peligro de pared plana
+    iss_detector.setThreshold21 (0.5); // Si este ratio sale cerca de 1 el keypoint es malo, ya que largo y ancho son iguales, y hay peligro de simetría circular o cilíndrica
+    iss_detector.setThreshold32 (0.5); // Si sale cerca de 1 el ancho y grosor son iguales (forma de tubo cuadrado), si sale muy bajo, significa que no tiene nada de grosor comparado con su ancho, peligro de pared plana
     iss_detector.setMinNeighbors (8); // Mínimo número de vecinos que tiene que tener, esto permite eliminar ruido
     iss_detector.setNumberOfThreads (4); // Usar 4 núcleos a la vez para calcular
     iss_detector.setInputCloud (cloud); // Le metemos la nube de puntos limpia de normales inválidas
