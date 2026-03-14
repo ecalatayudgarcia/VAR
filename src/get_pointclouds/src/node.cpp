@@ -71,7 +71,13 @@ private:
 
             std::cout << "Puntos tras VG: " << cloud_filtered->size() << std::endl;
 
-           
+            // Si la nube tiene muy pocos puntos, el frame es corrupto o la cámara no se ha estabilizado
+            // aún tras el giro. No guardamos y esperamos al siguiente frame (NO ponemos hacer_toma = false)
+            if(cloud_filtered->size() < 5000){
+                std::cout << "Toma ignorada por pocos puntos: " << cloud_filtered->size() << std::endl;
+                return;
+            }
+
             visu_pc = cloud_filtered;  // Se asigna al visualizador la nube de puntos filtrada, para que lo muestre el hilo del visualizador
 
             std::string nombre = "/home/ros2_ws/src/nubes/scenes/toma_" + std::to_string(numero_toma) + ".pcd";
@@ -90,15 +96,6 @@ private:
         double angle = 2 * atan2(q_z, q_w);
         double current_x = msg->pose.pose.position.x;
         double current_y = msg->pose.pose.position.y;
-
-        if(primera_vez){
-            angulo_ultima_toma = angle;
-            x_ultima_toma = current_x;
-            y_ultima_toma = current_y;
-            primera_vez = false;
-            hacer_toma = true; // Hacemos la Toma 0 real
-            return; 
-        }
         
         RCLCPP_INFO_STREAM_THROTTLE(this->get_logger(), *this->get_clock(),
         2000,
@@ -120,12 +117,11 @@ private:
 
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr subscription_;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odometrySub;
-    bool hacer_toma = true;
+    bool hacer_toma = false;
     double angulo_ultima_toma = 0.0;
     int numero_toma = 0;
     double x_ultima_toma = 0.0;
     double y_ultima_toma = 0.0;
-    bool primera_vez = true;
 };
 
 int main(int argc, char** argv) {
@@ -166,4 +162,4 @@ int main(int argc, char** argv) {
 /* Cada vez que se añada una librería nueva, como la de odometría, se tiene que:
     - Añadir como find_package(nav_msgs REQUIRED) en el CMakeLists.txt
     - Enlazar la dependencia (conecta ejecutable con las librerías) en ament_target_dependencies (añadimos ahí nav_msgs)
-    - Actualizamos el package.xml, añadiendo el DNI del paquete así: <depend>nav_msgs</depend>*/ 
+    - Actualizamos el package.xml, añadiendo el DNI del paquete así: <depend>nav_msgs</depend>*/
