@@ -134,7 +134,7 @@ int main() {
         // VISUALIZADOR MATCHINGS COMENTAR ESTO PARA VER DIRECTAMENTE EL RESULTADO FINAL //
         ///////////////////////////////////////////////////////////////////////////////////
         if(toma == 19){
-            visualizarMatchings(cloud1, cloud2, keypoints1,  keypoints2, correspondencias_inliers);
+            //visualizarMatchings(cloud1, cloud2, keypoints1,  keypoints2, correspondencias_inliers);
 
         }   
 
@@ -166,18 +166,18 @@ int main() {
         /////////
         // ICP //
         /////////
-        pcl::GeneralizedIterativeClosestPoint<pcl::PointXYZRGB, pcl::PointXYZRGB> icp;
+        pcl::IterativeClosestPoint<pcl::PointXYZRGB, pcl::PointXYZRGB> icp;
         icp.setInputSource(cloud2_clean);
         icp.setInputTarget(cloud1_clean);
-        icp.setMaxCorrespondenceDistance(0.20); 
-        icp.setMaximumIterations(100);
+        icp.setMaxCorrespondenceDistance(0.90); 
+        icp.setMaximumIterations(40);
         icp.setTransformationEpsilon(1e-8);
         icp.setEuclideanFitnessEpsilon(1e-2);
 
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr alineacion_temporal(new pcl::PointCloud<pcl::PointXYZRGB>());
         
         // ¡LE PASAMOS LA MATRIZ DEL SVD AL ICP!
-        icp.align(*alineacion_temporal, matriz_inicial_svd);
+        icp.align(*alineacion_temporal, matriz_inicial);
 
         if (icp.hasConverged()) {
             double score = icp.getFitnessScore();
