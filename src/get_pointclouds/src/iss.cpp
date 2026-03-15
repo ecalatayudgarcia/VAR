@@ -10,6 +10,7 @@
 #include <pcl/common/transforms.h>
 #include <pcl/registration/correspondence_rejection_sample_consensus.h>
 #include <pcl/registration/icp.h>
+#include <pcl/registration/gicp.h>
 #include <pcl/console/print.h>
 
 void visualizarMapaFinal(pcl::PointCloud<pcl::PointXYZRGB>::Ptr&);
@@ -121,7 +122,7 @@ int main() {
         ransac.setInputSource(keypoints2);
         ransac.setInputTarget(keypoints1); 
         ransac.setInputCorrespondences(correspondencias);
-        ransac.setInlierThreshold(0.15); 
+        ransac.setInlierThreshold(0.15); //umbral
         ransac.setMaximumIterations(5000); // Número de veces que intenta buscar la combinación perfecta
         ransac.getCorrespondences(*correspondencias_inliers);
 
@@ -140,33 +141,24 @@ int main() {
         ///////////////////////////
         // MATRIZ INICIAL (SVD) //
         ///////////////////////////
-        Eigen::Matrix4f matriz_inicial_svd = Eigen::Matrix4f::Identity();
+        Eigen::Matrix4f matriz_inicial = Eigen::Matrix4f::Identity();
         
         // Solo calculamos SVD si RANSAC dejó al menos 3 líneas sanas (el mínimo matemático)
         if (correspondencias_inliers->size() >= 3) {
-            pcl::registration::TransformationEstimationSVD<pcl::PointXYZRGB, pcl::PointXYZRGB> estimador_svd;
-            
-            // Esta función SÍ lee los índices de correspondencias_inliers. ¡Estaba bien hecha!
-            estimador_svd.estimateRigidTransformation(*keypoints2, *keypoints1, *correspondencias_inliers, matriz_inicial_svd);
-
-            // --- NUEVO: CONTROL DE CORDURA (SANITY CHECK) ---
+            matriz_inicial = ransac.getBestTransformation();
             // Calculamos cuánta distancia (traslación) nos dice el SVD que nos hemos movido
-            float tx = matriz_inicial_svd(0, 3);
-            float ty = matriz_inicial_svd(1, 3);
-            float tz = matriz_inicial_svd(2, 3);
+            float tx = matriz_inicial(0, 3);
+            float ty = matriz_inicial(1, 3);
+            float tz = matriz_inicial(2, 3);
             float distancia_svd = std::sqrt(tx*tx + ty*ty + tz*tz);
 
-            // Si el SVD dice que nos hemos movido más de 30 cm de golpe, es un falso positivo por culpa de paredes lisas.
-            if (distancia_svd > 0.15) {
-                std::cout << "¡ALERTA CRÍTICA! SVD alucinado (Salto de " << distancia_svd << "m). Toma 100% corrupta. SALTANDO." << std::endl;
-                
+            if (distancia_svd > 0.30) {
+                std::cout << "SVD alucinado (Salto de " << distancia_svd << "m). Toma 100% corrupta. SALTANDO." << std::endl;
                 // Actualizamos las variables para no quedarnos atascados, pero NO añadimos nada al mapa
-                Eigen::Affine3f giro_estimado = pcl::getTransformation(0, 0, 0, 0, 0.174, 0); // 0.174 rad = 10 grados
-                matriz_inicial_svd = giro_estimado.matrix();
+                matriz_inicial = Eigen::Matrix4f::Identity(); // Reseteamos
             } else {
                 std::cout << "SVD calculada con exito (Distancia lógica: " << distancia_svd << "m)." << std::endl;
             }
-            // ------------------------------------------------
         } else {
             std::cout << "ALERTA: Muy pocos inliers (" << correspondencias_inliers->size() << "). El ICP tendra que hacerlo solo." << std::endl;
         }
@@ -174,10 +166,10 @@ int main() {
         /////////
         // ICP //
         /////////
-        pcl::IterativeClosestPoint<pcl::PointXYZRGB, pcl::PointXYZRGB> icp;
+        pcl::GeneralizedIterativeClosestPoint<pcl::PointXYZRGB, pcl::PointXYZRGB> icp;
         icp.setInputSource(cloud2_clean);
         icp.setInputTarget(cloud1_clean);
-        icp.setMaxCorrespondenceDistance(0.20); // 20 cm está genial si SVD hace su trabajo previo
+        icp.setMaxCorrespondenceDistance(0.20); 
         icp.setMaximumIterations(100);
         icp.setTransformationEpsilon(1e-8);
         icp.setEuclideanFitnessEpsilon(1e-2);
@@ -197,9 +189,9 @@ int main() {
             pcl::getTranslationAndEulerAngles(affine, tx, ty, tz, rot_x, rot_y, rot_z);
 
             // Anulamos movimientos imposibles para el Turtlebot SOLO TIENE UN GRADO DE LIBERTAD (ROTAR EN y)
-            tx = 0.0; // No se desliza de lado
+            //tx = 0.0; // No se desliza de lado
             ty = 0.0; // No vuela ni se hunde
-            tz = 0.0; // No avanza ni retrocede
+            //tz = 0.0; // No avanza ni retrocede
             rot_x = 0.0; // No mira hacia arriba/abajo (Cabeceo)
             rot_z = 0.0; // No ladea la cabeza (Alabeo)
 
