@@ -258,7 +258,7 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr iss(pcl::PointCloud<pcl::PointXYZRGB>::Pt
     iss_detector.setMinNeighbors (5); // Mínimo número de vecinos que tiene que tener, esto permite eliminar ruido
     iss_detector.setNumberOfThreads (4); // Usar 4 núcleos a la vez para calcular
     iss_detector.setInputCloud (cloud); // Le metemos la nube de puntos limpia de normales inválidas
-    iss_detector.compute (*keypoints); // Metemos el cálculo en keypoints1
+    iss_detector.compute (*keypoints); // Metemos el cálculo en keypoints1a
     return keypoints;
 }
 
