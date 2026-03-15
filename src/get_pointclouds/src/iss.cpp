@@ -121,8 +121,8 @@ int main() {
         ransac.setInputSource(keypoints2);
         ransac.setInputTarget(keypoints1); 
         ransac.setInputCorrespondences(correspondencias);
-        ransac.setInlierThreshold(0.05); 
-        ransac.setMaximumIterations(50000); // Número de veces que intenta buscar la combinación perfecta
+        ransac.setInlierThreshold(0.15); 
+        ransac.setMaximumIterations(5000); // Número de veces que intenta buscar la combinación perfecta
         ransac.getCorrespondences(*correspondencias_inliers);
 
         std::cout << "Lineas ANTES de RANSAC (Con Outliers): " << correspondencias->size() << std::endl;
@@ -197,9 +197,9 @@ int main() {
             pcl::getTranslationAndEulerAngles(affine, tx, ty, tz, rot_x, rot_y, rot_z);
 
             // Anulamos movimientos imposibles para el Turtlebot SOLO TIENE UN GRADO DE LIBERTAD (ROTAR EN y)
-            //tx = 0.0; // No se desliza de lado
+            tx = 0.0; // No se desliza de lado
             ty = 0.0; // No vuela ni se hunde
-            //tz = 0.0; // No avanza ni retrocede
+            tz = 0.0; // No avanza ni retrocede
             rot_x = 0.0; // No mira hacia arriba/abajo (Cabeceo)
             rot_z = 0.0; // No ladea la cabeza (Alabeo)
 
@@ -350,7 +350,7 @@ void visualizarMatchings(pcl::PointCloud<pcl::PointXYZRGB>::Ptr& cloud1, pcl::Po
     viewer_corr->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 6, "keypoints2_offset");
 
     // 5. Dibujamos las líneas usando la nube 2 desplazada
-    viewer_corr->addCorrespondences<pcl::PointXYZRGB>(keypoints1, keypoints2_offset, *correspondencias_inliers, "lineas_correspondencia");
+    viewer_corr->addCorrespondences<pcl::PointXYZRGB>(keypoints2_offset, keypoints1, *correspondencias_inliers, "lineas_correspondencia");
     viewer_corr->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 0.0, 0.5, 1.0, "lineas_correspondencia");
     viewer_corr->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_LINE_WIDTH, 2, "lineas_correspondencia");
 
