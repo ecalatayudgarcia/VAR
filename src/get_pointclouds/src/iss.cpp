@@ -133,10 +133,8 @@ int main() {
         ///////////////////////////////////////////////////////////////////////////////////
         // VISUALIZADOR MATCHINGS COMENTAR ESTO PARA VER DIRECTAMENTE EL RESULTADO FINAL //
         ///////////////////////////////////////////////////////////////////////////////////
-        if(toma == 19){
-            visualizarMatchings(cloud1, cloud2, keypoints1,  keypoints2, correspondencias_inliers);
-
-        }   
+        
+        visualizarMatchings(cloud1, cloud2, keypoints1,  keypoints2, correspondencias_inliers);
 
         ///////////////////////////
         // MATRIZ INICIAL (SVD) //
@@ -233,7 +231,7 @@ pcl::PointCloud<pcl::FPFHSignature33>::Ptr descriptoresFPFH(pcl::PointCloud<pcl:
 
     pcl::search::KdTree<pcl::PointXYZRGB>::Ptr tree1_fpfh (new pcl::search::KdTree<pcl::PointXYZRGB> ());
     fpfh1.setSearchMethod(tree1_fpfh);
-    fpfh1.setRadiusSearch(0.15);
+    fpfh1.setRadiusSearch(0.4);
     fpfh1.compute(*descriptores);
     return descriptores;
 }
@@ -251,10 +249,10 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr iss(pcl::PointCloud<pcl::PointXYZRGB>::Pt
     pcl::search::KdTree<pcl::PointXYZRGB>::Ptr tree_iss (new pcl::search::KdTree<pcl::PointXYZRGB> ());
     pcl::ISSKeypoint3D<pcl::PointXYZRGB, pcl::PointXYZRGB> iss_detector; // Invocamos el algoritmo ISS para usar sus métodos
     iss_detector.setSearchMethod (tree_iss);
-    iss_detector.setSalientRadius (0.10); // Dibuja una esfera virtual de x centímetros de radio a su alrededor y ve como están distribuidos geométricamente los puntos que caen en esa esfera
-    iss_detector.setNonMaxRadius (0.05); // Supresión de no máximos: es para tener un keypoint limpio por cada esquina, borra el resto en un radio de x centímetros
-    iss_detector.setThreshold21 (0.8); // Si este ratio sale cerca de 1 el keypoint es malo, ya que largo y ancho son iguales, y hay peligro de simetría circular o cilíndrica
-    iss_detector.setThreshold32 (0.8); // Si sale cerca de 1 el ancho y grosor son iguales (forma de tubo cuadrado), si sale muy bajo, significa que no tiene nada de grosor comparado con su ancho, peligro de pared plana
+    iss_detector.setSalientRadius (0.15); // Dibuja una esfera virtual de x centímetros de radio a su alrededor y ve como están distribuidos geométricamente los puntos que caen en esa esfera
+    iss_detector.setNonMaxRadius (0.10); // Supresión de no máximos: es para tener un keypoint limpio por cada esquina, borra el resto en un radio de x centímetros
+    iss_detector.setThreshold21 (0.7); // Si este ratio sale cerca de 1 el keypoint es malo, ya que largo y ancho son iguales, y hay peligro de simetría circular o cilíndrica
+    iss_detector.setThreshold32 (0.7); // Si sale cerca de 1 el ancho y grosor son iguales (forma de tubo cuadrado), si sale muy bajo, significa que no tiene nada de grosor comparado con su ancho, peligro de pared plana
     iss_detector.setMinNeighbors (5); // Mínimo número de vecinos que tiene que tener, esto permite eliminar ruido
     iss_detector.setNumberOfThreads (4); // Usar 4 núcleos a la vez para calcular
     iss_detector.setInputCloud (cloud); // Le metemos la nube de puntos limpia de normales inválidas
