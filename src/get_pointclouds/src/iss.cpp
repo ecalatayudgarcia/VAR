@@ -123,7 +123,7 @@ int main() {
         ransac.setInputTarget(keypoints1); 
         ransac.setInputCorrespondences(correspondencias);
         ransac.setInlierThreshold(0.15); //umbral
-        ransac.setMaximumIterations(5000); // Número de veces que intenta buscar la combinación perfecta
+        ransac.setMaximumIterations(10000); // Número de veces que intenta buscar la combinación perfecta
         ransac.getCorrespondences(*correspondencias_inliers);
 
         std::cout << "Lineas ANTES de RANSAC (Con Outliers): " << correspondencias->size() << std::endl;
@@ -134,7 +134,7 @@ int main() {
         // VISUALIZADOR MATCHINGS COMENTAR ESTO PARA VER DIRECTAMENTE EL RESULTADO FINAL //
         ///////////////////////////////////////////////////////////////////////////////////
         if(toma == 19){
-            //visualizarMatchings(cloud1, cloud2, keypoints1,  keypoints2, correspondencias_inliers);
+            visualizarMatchings(cloud1, cloud2, keypoints1,  keypoints2, correspondencias_inliers);
 
         }   
 
@@ -169,8 +169,8 @@ int main() {
         pcl::IterativeClosestPoint<pcl::PointXYZRGB, pcl::PointXYZRGB> icp;
         icp.setInputSource(cloud2_clean);
         icp.setInputTarget(cloud1_clean);
-        icp.setMaxCorrespondenceDistance(0.90); 
-        icp.setMaximumIterations(40);
+        icp.setMaxCorrespondenceDistance(0.20); 
+        icp.setMaximumIterations(100);
         icp.setTransformationEpsilon(1e-8);
         icp.setEuclideanFitnessEpsilon(1e-2);
 
@@ -189,9 +189,9 @@ int main() {
             pcl::getTranslationAndEulerAngles(affine, tx, ty, tz, rot_x, rot_y, rot_z);
 
             // Anulamos movimientos imposibles para el Turtlebot SOLO TIENE UN GRADO DE LIBERTAD (ROTAR EN y)
-            //tx = 0.0; // No se desliza de lado
+            tx = 0.0; // No se desliza de lado
             ty = 0.0; // No vuela ni se hunde
-            //tz = 0.0; // No avanza ni retrocede
+            tz = 0.0; // No avanza ni retrocede
             rot_x = 0.0; // No mira hacia arriba/abajo (Cabeceo)
             rot_z = 0.0; // No ladea la cabeza (Alabeo)
 
@@ -233,7 +233,7 @@ pcl::PointCloud<pcl::FPFHSignature33>::Ptr descriptoresFPFH(pcl::PointCloud<pcl:
 
     pcl::search::KdTree<pcl::PointXYZRGB>::Ptr tree1_fpfh (new pcl::search::KdTree<pcl::PointXYZRGB> ());
     fpfh1.setSearchMethod(tree1_fpfh);
-    fpfh1.setRadiusSearch(0.3);
+    fpfh1.setRadiusSearch(0.15);
     fpfh1.compute(*descriptores);
     return descriptores;
 }
@@ -251,14 +251,14 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr iss(pcl::PointCloud<pcl::PointXYZRGB>::Pt
     pcl::search::KdTree<pcl::PointXYZRGB>::Ptr tree_iss (new pcl::search::KdTree<pcl::PointXYZRGB> ());
     pcl::ISSKeypoint3D<pcl::PointXYZRGB, pcl::PointXYZRGB> iss_detector; // Invocamos el algoritmo ISS para usar sus métodos
     iss_detector.setSearchMethod (tree_iss);
-    iss_detector.setSalientRadius (0.25); // Dibuja una esfera virtual de x centímetros de radio a su alrededor y ve como están distribuidos geométricamente los puntos que caen en esa esfera
-    iss_detector.setNonMaxRadius (0.12); // Supresión de no máximos: es para tener un keypoint limpio por cada esquina, borra el resto en un radio de x centímetros
-    iss_detector.setThreshold21 (0.5); // Si este ratio sale cerca de 1 el keypoint es malo, ya que largo y ancho son iguales, y hay peligro de simetría circular o cilíndrica
-    iss_detector.setThreshold32 (0.5); // Si sale cerca de 1 el ancho y grosor son iguales (forma de tubo cuadrado), si sale muy bajo, significa que no tiene nada de grosor comparado con su ancho, peligro de pared plana
-    iss_detector.setMinNeighbors (8); // Mínimo número de vecinos que tiene que tener, esto permite eliminar ruido
+    iss_detector.setSalientRadius (0.10); // Dibuja una esfera virtual de x centímetros de radio a su alrededor y ve como están distribuidos geométricamente los puntos que caen en esa esfera
+    iss_detector.setNonMaxRadius (0.05); // Supresión de no máximos: es para tener un keypoint limpio por cada esquina, borra el resto en un radio de x centímetros
+    iss_detector.setThreshold21 (0.8); // Si este ratio sale cerca de 1 el keypoint es malo, ya que largo y ancho son iguales, y hay peligro de simetría circular o cilíndrica
+    iss_detector.setThreshold32 (0.8); // Si sale cerca de 1 el ancho y grosor son iguales (forma de tubo cuadrado), si sale muy bajo, significa que no tiene nada de grosor comparado con su ancho, peligro de pared plana
+    iss_detector.setMinNeighbors (5); // Mínimo número de vecinos que tiene que tener, esto permite eliminar ruido
     iss_detector.setNumberOfThreads (4); // Usar 4 núcleos a la vez para calcular
     iss_detector.setInputCloud (cloud); // Le metemos la nube de puntos limpia de normales inválidas
-    iss_detector.compute (*keypoints); // Metemos el cálculo en keypoints1
+    iss_detector.compute (*keypoints); // Metemos el cálculo en keypoints1a
     return keypoints;
 }
 
