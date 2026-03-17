@@ -122,7 +122,7 @@ int main() {
         ransac.setInputSource(keypoints2);
         ransac.setInputTarget(keypoints1); 
         ransac.setInputCorrespondences(correspondencias);
-        ransac.setInlierThreshold(0.15); //umbral
+        ransac.setInlierThreshold(0.10); //umbral
         ransac.setMaximumIterations(10000); // Número de veces que intenta buscar la combinación perfecta
         ransac.getCorrespondences(*correspondencias_inliers);
 
@@ -134,7 +134,7 @@ int main() {
         // VISUALIZADOR MATCHINGS COMENTAR ESTO PARA VER DIRECTAMENTE EL RESULTADO FINAL //
         ///////////////////////////////////////////////////////////////////////////////////
         
-        visualizarMatchings(cloud1, cloud2, keypoints1,  keypoints2, correspondencias_inliers);
+        //visualizarMatchings(cloud1, cloud2, keypoints1,  keypoints2, correspondencias_inliers);
 
         ///////////////////////////
         // MATRIZ INICIAL (SVD) //
