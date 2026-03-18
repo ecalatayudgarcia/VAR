@@ -123,7 +123,7 @@ int main() {
         ransac.setInputTarget(keypoints1); 
         ransac.setInputCorrespondences(correspondencias);
         ransac.setInlierThreshold(0.10); //umbral
-        ransac.setMaximumIterations(10000); // Número de veces que intenta buscar la combinación perfecta
+        ransac.setMaximumIterations(50000); // Número de veces que intenta buscar la combinación perfecta
         ransac.getCorrespondences(*correspondencias_inliers);
 
         std::cout << "Lineas ANTES de RANSAC (Con Outliers): " << correspondencias->size() << std::endl;
@@ -164,7 +164,7 @@ int main() {
         /////////
         // ICP //
         /////////
-        pcl::IterativeClosestPoint<pcl::PointXYZRGB, pcl::PointXYZRGB> icp;
+        pcl::GeneralizedIterativeClosestPoint<pcl::PointXYZRGB, pcl::PointXYZRGB> icp;
         icp.setInputSource(cloud2_clean);
         icp.setInputTarget(cloud1_clean);
         icp.setMaxCorrespondenceDistance(0.20); 

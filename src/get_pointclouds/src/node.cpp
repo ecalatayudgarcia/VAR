@@ -106,7 +106,7 @@ private:
         // Normalizamos el ángulo con trigonometría porque en ROS2 los ángulos van de -pi a pi (-180 a 180)
         double distancia_giro = abs(atan2(sin(angle - angulo_ultima_toma), cos(angle - angulo_ultima_toma)));
         double distancia_avance = std::sqrt(std::pow(current_x - x_ultima_toma, 2) + std::pow(current_y - y_ultima_toma, 2));
-        if(distancia_giro >= 0.139 || distancia_avance >= 0.2){ // 0.174 en radianes son 10 grados
+        if(distancia_giro >= 0.139 || distancia_avance >= 0.2){ // 0.174 en radianes son 10 grados, 0.104 también daba buen resultado
             hacer_toma = true;
             angulo_ultima_toma = angle;
             x_ultima_toma = current_x;
