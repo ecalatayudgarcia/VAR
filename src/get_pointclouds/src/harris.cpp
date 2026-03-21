@@ -122,7 +122,7 @@ int main() {
         ransac.setInputSource(keypoints2);
         ransac.setInputTarget(keypoints1); 
         ransac.setInputCorrespondences(correspondencias);
-        ransac.setInlierThreshold(0.15); //umbral
+        ransac.setInlierThreshold(0.10); //umbral
         ransac.setMaximumIterations(5000); // Número de veces que intenta buscar la combinación perfecta
         ransac.getCorrespondences(*correspondencias_inliers);
 
@@ -133,10 +133,10 @@ int main() {
         ///////////////////////////////////////////////////////////////////////////////////
         // VISUALIZADOR MATCHINGS COMENTAR ESTO PARA VER DIRECTAMENTE EL RESULTADO FINAL //
         ///////////////////////////////////////////////////////////////////////////////////
-        if(toma == 19){
-            visualizarMatchings(cloud1, cloud2, keypoints1,  keypoints2, correspondencias_inliers);
+        
+        //visualizarMatchings(cloud1, cloud2, keypoints1,  keypoints2, correspondencias_inliers);
 
-        }   
+         
 
         ///////////////////////////
         // MATRIZ INICIAL (SVD) //
@@ -153,7 +153,7 @@ int main() {
             float distancia_svd = std::sqrt(tx*tx + ty*ty + tz*tz);
 
             if (distancia_svd > 0.30) {
-                std::cout << "SVD alucinado (Salto de " << distancia_svd << "m). Toma 100% corrupta. SALTANDO." << std::endl;
+                std::cout << "SVD alucinado (Salto de " << distancia_svd << "m). Toma corrupta. SALTANDO." << std::endl;
                 // Actualizamos las variables para no quedarnos atascados, pero NO añadimos nada al mapa
                 matriz_inicial = Eigen::Matrix4f::Identity(); // Reseteamos
             } else {
@@ -168,15 +168,14 @@ int main() {
         /////////
         pcl::GeneralizedIterativeClosestPoint<pcl::PointXYZRGB, pcl::PointXYZRGB> icp;
         icp.setInputSource(cloud2_clean);
-        icp.setInputTarget(mapa_global);
+        icp.setInputTarget(cloud1_clean);
         icp.setMaxCorrespondenceDistance(0.20); 
-        icp.setMaximumIterations(40);
+        icp.setMaximumIterations(100);
         icp.setTransformationEpsilon(1e-8);
         icp.setEuclideanFitnessEpsilon(1e-2);
 
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr alineacion_temporal(new pcl::PointCloud<pcl::PointXYZRGB>());
         
-        // ¡LE PASAMOS LA MATRIZ DEL SVD AL ICP!
         icp.align(*alineacion_temporal, matriz_inicial);
 
         if (icp.hasConverged()) {
@@ -189,9 +188,9 @@ int main() {
             pcl::getTranslationAndEulerAngles(affine, tx, ty, tz, rot_x, rot_y, rot_z);
 
             // Anulamos movimientos imposibles para el Turtlebot SOLO TIENE UN GRADO DE LIBERTAD (ROTAR EN y)
-            //tx = 0.0; // No se desliza de lado
+            tx = 0.0; // No se desliza de lado
             ty = 0.0; // No vuela ni se hunde
-            //tz = 0.0; // No avanza ni retrocede
+            tz = 0.0; // No avanza ni retrocede
             rot_x = 0.0; // No mira hacia arriba/abajo (Cabeceo)
             rot_z = 0.0; // No ladea la cabeza (Alabeo)
 
@@ -232,7 +231,7 @@ pcl::PointCloud<pcl::SHOT352>::Ptr descriptoresSHOT(pcl::PointCloud<pcl::PointXY
     shot.setInputNormals(normals);
     pcl::search::KdTree<pcl::PointXYZRGB>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZRGB>());
     shot.setSearchMethod(tree);
-    shot.setRadiusSearch(0.3);
+    shot.setRadiusSearch(0.4);
     shot.compute(*descriptores);
     return descriptores;
 }
@@ -241,7 +240,7 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr harris(pcl::PointCloud<pcl::PointXYZRGB>:
     pcl::PointCloud<pcl::PointXYZI>::Ptr keypoints_i(new pcl::PointCloud<pcl::PointXYZI>());
     pcl::HarrisKeypoint3D<pcl::PointXYZRGB, pcl::PointXYZI> harris_detector;
     harris_detector.setInputCloud(cloud);
-    harris_detector.setRadius(0.25);        // Radio de búsqueda de vecinos (equivale a salientRadius)
+    harris_detector.setRadius(0.15);        // Radio de búsqueda de vecinos (equivale a salientRadius)
     harris_detector.setThreshold(1e-6);     // Umbral mínimo de respuesta Harris para ser keypoint
     harris_detector.setNonMaxSupression(true); // Supresión de no máximos (equivale a NonMaxRadius)
     harris_detector.setRefine(false);       // Sin refinamiento subvóxel (más rápido)

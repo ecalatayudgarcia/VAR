@@ -151,7 +151,7 @@ int main() {
             float distancia_svd = std::sqrt(tx*tx + ty*ty + tz*tz);
 
             if (distancia_svd > 0.30) {
-                std::cout << "SVD alucinado (Salto de " << distancia_svd << "m). Toma 100% corrupta. SALTANDO." << std::endl;
+                std::cout << "SVD alucinado (Salto de " << distancia_svd << "m). Toma corrupta. SALTANDO." << std::endl;
                 // Actualizamos las variables para no quedarnos atascados, pero NO añadimos nada al mapa
                 matriz_inicial = Eigen::Matrix4f::Identity(); // Reseteamos
             } else {
@@ -173,8 +173,7 @@ int main() {
         icp.setEuclideanFitnessEpsilon(1e-2);
 
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr alineacion_temporal(new pcl::PointCloud<pcl::PointXYZRGB>());
-        
-        // ¡LE PASAMOS LA MATRIZ DEL SVD AL ICP!
+
         icp.align(*alineacion_temporal, matriz_inicial);
 
         if (icp.hasConverged()) {
