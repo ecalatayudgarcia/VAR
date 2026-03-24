@@ -286,8 +286,8 @@ void visualizarMapaFinal(pcl::PointCloud<pcl::PointXYZRGB>::Ptr& mapa_global){
     std::cout << "Puntos totales en el mapa: " << mapa_global->size() << std::endl;
 
     // Guardamos el mapa en un archivo por si lo quieres usar después
-    pcl::io::savePCDFileBinary("/home/ros2_ws/src/nubes/scenes/MAPA_FINAL.pcd", *mapa_global);
-    std::cout << "Mapa guardado en disco como MAPA_FINAL.pcd" << std::endl;
+    pcl::io::savePCDFileBinary("/home/ros2_ws/src/nubes/scenes/MAPA_FINAL_HARRIS.pcd", *mapa_global);
+    std::cout << "Mapa guardado en disco como MAPA_FINAL_HARRIS.pcd" << std::endl;
 
     // --- VISUALIZADOR DEL MAPA GLOBAL ---
     pcl::visualization::PCLVisualizer::Ptr visor_mapa(new pcl::visualization::PCLVisualizer("Mapa 3D Completo"));

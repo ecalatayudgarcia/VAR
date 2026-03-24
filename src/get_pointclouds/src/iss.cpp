@@ -134,7 +134,10 @@ int main() {
         // VISUALIZADOR MATCHINGS COMENTAR ESTO PARA VER DIRECTAMENTE EL RESULTADO FINAL //
         ///////////////////////////////////////////////////////////////////////////////////
         
-        //visualizarMatchings(cloud1, cloud2, keypoints1,  keypoints2, correspondencias_inliers);
+        if(toma == 19){
+            visualizarMatchings(cloud1, cloud2, keypoints1,  keypoints2, correspondencias_inliers);
+        }
+       
 
         ///////////////////////////
         // MATRIZ INICIAL (SVD) //

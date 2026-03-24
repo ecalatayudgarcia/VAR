@@ -31,12 +31,15 @@ ament_target_dependencies(get_pointclouds_node rclcpp sensor_msgs pcl_conversion
 
 add_executable(iss src/iss.cpp)
 add_executable(harris src/harris.cpp)
+add_executable(ver_mapa src/ver_mapa.cpp)
 # Le decimos dónde están los archivos de cabecera de PCL
 target_include_directories(iss PUBLIC ${PCL_INCLUDE_DIRS})
 target_include_directories(harris PUBLIC ${PCL_INCLUDE_DIRS})
+target_include_directories(ver_mapa PUBLIC ${PCL_INCLUDE_DIRS})
 # Enlazamos las librerías matemáticas de PCL para que pueda compilar
 target_link_libraries(iss ${PCL_LIBRARIES})
 target_link_libraries(harris ${PCL_LIBRARIES})
+target_link_libraries(ver_mapa ${PCL_LIBRARIES})
 target_include_directories(get_pointclouds_node PUBLIC ${PCL_INCLUDE_DIRS})
 add_definitions(${PCL_DEFINITIONS})
 target_link_libraries(get_pointclouds_node ${PCL_LIBRARIES})
@@ -45,6 +48,7 @@ install(TARGETS
   get_pointclouds_node
   iss
   harris
+  ver_mapa
   DESTINATION lib/${PROJECT_NAME}
 )
 
