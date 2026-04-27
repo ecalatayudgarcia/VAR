@@ -163,3 +163,10 @@ int main(int argc, char** argv) {
     - Añadir como find_package(nav_msgs REQUIRED) en el CMakeLists.txt
     - Enlazar la dependencia (conecta ejecutable con las librerías) en ament_target_dependencies (añadimos ahí nav_msgs)
     - Actualizamos el package.xml, añadiendo el DNI del paquete así: <depend>nav_msgs</depend>*/
+
+
+// PRÁCTICA 2
+
+// ros2 launch turtlebot_gazebo_race create_multi_robot_race.launch.py 
+// ros2 launch turtlebot3_cartographer cartographer.launch.py use_sim_time:=True
+
