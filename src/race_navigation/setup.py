@@ -24,6 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'ekf = race_navigation.ekf:main'
         ],
     },
 )
