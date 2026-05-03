@@ -169,4 +169,6 @@ int main(int argc, char** argv) {
 
 // ros2 launch turtlebot_gazebo_race create_multi_robot_race.launch.py 
 // ros2 launch turtlebot3_cartographer cartographer.launch.py use_sim_time:=True
+// ros2 launch turtlebot3_navigation2 navigation2.launch.py use_sim_time:=True map:=mapa_circuito.yaml
+// ros2 run nav2_map_server map_saver_cli -f mapa_circuito
 

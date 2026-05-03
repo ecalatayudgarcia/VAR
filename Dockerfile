@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y \
     ros-jazzy-turtlebot3-msgs \
     ros-jazzy-turtlebot3-simulations \
     ros-jazzy-ros-gz \
+    ros-jazzy-slam-toolbox \
     mesa-utils \
     libgl1 \
     libgl1-mesa-dri \
