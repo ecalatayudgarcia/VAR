@@ -3,11 +3,15 @@ import torch.nn as nn
 from torch.utils.data import Dataset
 from torchvision import transforms
 from PIL import Image
+from torch.utils.data import DataLoader
+import torch.optim as optim
 import pandas as pd
 import os
 
 
-class CircuitoDataset(Dataset):
+class CircuitoDataset(Dataset): ##Esta clase se instancia y prepara los tensores (datos, imagenes y csv)
+    #basicamente recorta las imagenes y las pasa a tensor (valores 0.0 a 1.0)
+    
     def __init__(self, archivo_csv, directorio_raiz):
         self.datos = pd.read_csv(archivo_csv)
         self.directorio_raiz = directorio_raiz
@@ -38,14 +42,7 @@ class CircuitoDataset(Dataset):
         # 3. Mapeo Lógico (Regresión a Clasificación)
         # Convertimos los valores del teclado (-1.0, 0.0, 1.0) en índices de clase enteros
         giro_bruto = float(self.datos.iloc[indice, 1])
-        if giro_bruto == -1.0:
-            etiqueta = 0  # Clase 0: Derecha
-        elif giro_bruto == 0.0:
-            etiqueta = 1  # Clase 1: Recto
-        elif giro_bruto == 1.0:
-            etiqueta = 2  # Clase 2: Izquierda
-        else:
-            etiqueta = 1  # Failsafe: Ante duda, ir recto
+        etiqueta = torch.tensor([giro_bruto], dtype=torch.float32)
             
         return imagen_tensor, etiqueta
 
@@ -81,8 +78,8 @@ class CerebroPiloto(nn.Module):
             nn.Flatten(),
             nn.Linear(dimensiones_aplanadas, 128),
             nn.ReLU(),
-            # Salida de 3 neuronas, correspondientes a las clases 0, 1 y 2
-            nn.Linear(128, 3) 
+            # Salida de 1 neurona (valor continuo de velocidad angular)
+            nn.Linear(128, 1) 
         )
 
     def forward(self, x):
@@ -95,29 +92,25 @@ if __name__ == '__main__':
     # 1. Configuración de hardware
     dispositivo = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Entrenando en: {dispositivo}")
-
-    # 2. Instanciar Dataset y DataLoader
-    # Ajusta estas rutas a tu realidad
     csv_path = '../src/dataset_carrera/registro_conduccion.csv'
     img_dir = '../src/dataset_carrera/'
     
     dataset = CircuitoDataset(archivo_csv=csv_path, directorio_raiz=img_dir)
-    # El DataLoader gestiona el flujo de datos por lotes (batches)
+    #El DataLoader gestiona el flujo de datos por lotes (batches)
     train_loader = DataLoader(dataset, batch_size=32, shuffle=True)
 
-    # 3. Instanciar Modelo, Pérdida y Optimizador
     modelo = CerebroPiloto().to(dispositivo)
-    criterio = nn.CrossEntropyLoss() # Ideal para clasificación de 3 clases
+    criterio = nn.MSELoss() # Error Cuadrático Medio para regresión continua
     optimizador = optim.Adam(modelo.parameters(), lr=0.001)
 
-    # 4. Bucle de Entrenamiento (Epochs)
+
     epochs = 20
     print("Iniciando entrenamiento...")
 
     for epoch in range(epochs):
         error_total = 0.0
-        for imagenes, etiquetas in train_loader:
-            # Enviar datos al dispositivo (CPU/GPU)
+        for imagenes, etiquetas in train_loader: ##como en la clase del dataset se ha sobreescrito el __getitem__ devuelve imagen,label por cada for (yield)
+            #enviar imagenes y labels a la gpu
             imagenes, etiquetas = imagenes.to(dispositivo), etiquetas.to(dispositivo)
 
             # Paso 1: Limpiar gradientes anteriores

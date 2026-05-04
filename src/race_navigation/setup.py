@@ -25,7 +25,8 @@ setup(
     entry_points={
         'console_scripts': [
             'ekf = race_navigation.ekf:main',
-            'recolector = race_navigation.dataset:main'
+            'recolector = race_navigation.dataset:main',
+            'piloto = race_navigation.piloto:main'
         ],
     },
 )
