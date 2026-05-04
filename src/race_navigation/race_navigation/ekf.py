@@ -34,8 +34,7 @@ class ControladorWaypoints(Node):
 
         self.publicar_movimiento = self.create_publisher( 
             Twist,          
-            '/cmd_vel',   
-            self.enviar_movimiento,    
+            '/cmd_vel',    
             10                      
         )
 
@@ -48,7 +47,7 @@ class ControladorWaypoints(Node):
         self.get_logger().info(f'posX: {msg.pose.pose.position.x}')
         self.get_logger().info(f'posX: {msg.pose.pose.position.y}')
 
-    def enviar_movimiento(self,msg):
+
 
 
 

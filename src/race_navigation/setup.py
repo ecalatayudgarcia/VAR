@@ -24,7 +24,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'ekf = race_navigation.ekf:main'
+            'ekf = race_navigation.ekf:main',
+            'recolector = race_navigation.dataset:main'
         ],
     },
 )
