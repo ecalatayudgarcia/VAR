@@ -18,8 +18,7 @@ class NodoRecolector(Node):
         self.frecuencia_guardado = 3 # Se guardan 1 de cada 3 frames 
         self.directorio_datos = './src/dataset_carrera'
         self.archivo_csv = f'{self.directorio_datos}/registro_conduccion.csv'
-        
-
+    
         if not os.path.exists(self.directorio_datos):
             os.makedirs(self.directorio_datos)
 
@@ -27,8 +26,8 @@ class NodoRecolector(Node):
             escritor = csv.writer(f)
             escritor.writerow(['nombre_imagen', 'velocidad_angular_z'])
             
-        # 3. Herramienta de Visión
-        self.bridge = CvBridge()
+     
+        self.bridge = CvBridge() #necesario para transformar la imagenes
         
         self.sub_camara = self.create_subscription(
             Image,
@@ -44,33 +43,27 @@ class NodoRecolector(Node):
             
         self.get_logger().info('Recolector iniciado. Conduce el robot para grabar datos.')
 
-    def procesar_comando(self, msg):
+    def procesar_comando(self, msg): #cuando el joystick envia una velocidad angular se guarda aqui
         self.giro_actual = msg.angular.z
         self.velocidad_actual = msg.linear.x
 
     def procesar_imagen(self, msg):
-        """
-        Callback principal. Marca el ritmo lógico del nodo.
-        """
         self.contador_frames += 1
         
-
         if self.contador_frames % self.frecuencia_guardado != 0:
             return
             
-
         if self.velocidad_actual == 0.0:
             return
             
         try:
-            # Traducción: Mensaje de ROS2 (bytes) -> Matriz de Numpy (OpenCV)
+            #Traducir de mensaje de ros2 a matriz de openCV (imagen) y guardar
             imagen_cv = self.bridge.imgmsg_to_cv2(msg, "bgr8")
-            #guardar
             nombre_archivo = f'frame_{self.contador_frames}.jpg'
             ruta_absoluta = os.path.join(self.directorio_datos, nombre_archivo)
             cv2.imwrite(ruta_absoluta, imagen_cv)
             
-            # Registrar en el CSV la relación matemática: f(imagen) = giro
+            #GUARDAR en el dataset la velocidad angular asociada a este frame
             with open(self.archivo_csv, 'a', newline='') as f:
                 escritor = csv.writer(f)
                 escritor.writerow([nombre_archivo, self.giro_actual])

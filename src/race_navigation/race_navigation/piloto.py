@@ -9,12 +9,15 @@ import torch.nn as nn
 from torchvision import transforms
 from PIL import Image as PILImage
 
-# ==========================================
-# 1. LA TOPOLOGÍA DE LA RED (Debe ser idéntica al entrenamiento)
-# ==========================================
-class CerebroPiloto(nn.Module):
+
+class ModeloPiloto(nn.Module):
+    '''
+    Aqui solo se declara la misma estructura de la red para poder reservarla en memoria
+    y cargar el modelo ya entrenado 
+    '''
     def __init__(self):
         super().__init__()
+
         self.convoluciones = nn.Sequential(
             nn.Conv2d(3, 16, 3, padding=1), nn.ReLU(), nn.MaxPool2d(2, 2),
             nn.Conv2d(16, 32, 3, padding=1), nn.ReLU(), nn.MaxPool2d(2, 2),
@@ -30,76 +33,81 @@ class CerebroPiloto(nn.Module):
         x = self.convoluciones(x)
         return self.decisiones(x)
 
-# ==========================================
-# 2. EL NODO DE ROS2 (Intermediario entre Sensor y Motor)
-# ==========================================
+##NODO
 class PilotoAutonomo(Node):
+    '''
+    Funcinamiento principal del nodo:
+    cargar CNN -> suscribir a la camara -> ver cada foto y predecir una velocidad angular -> aplicarla
+    por ahora siempre avanza a 0.15 rd/s asique el modelo solo debe decir para donde girar segun lo que este viendo
+    '''
     def __init__(self):
         super().__init__('nodo_piloto_ia')
         
         self.bridge = CvBridge()
-        self.get_logger().info("Iniciando carga del modelo de IA...")
-        
-        # --- CARGA DEL CEREBRO ---
+        self.get_logger().info("Iniciando carga del modelo")
         self.dispositivo = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.modelo = CerebroPiloto()
-        
-        # OJO: Cambia esto por la ruta absoluta a tu archivo .pth
-        self.ruta_modelo = '/home/ros2_ws/race_navigation/race_navigation/modelo_piloto.pth' 
+        self.modelo = ModeloPiloto()
+        nombre_modelo = 'modelo_piloto.pth'
+        self.declare_parameter('archivo_modelo', nombre_modelo)
+        self.archivo_modelo =self.get_parameter('archivo_modelo').get_parameter_value().string_value
+        self.ruta_modelo = f'/home/ros2_ws/src/race_navigation/race_navigation/{self.archivo_modelo}'
+        #ros2 run race_navigation piloto --ros-args -p archivo_modelo:="nombre.pth"
         
         try:
             self.modelo.load_state_dict(torch.load(self.ruta_modelo, map_location=self.dispositivo))
             self.modelo.to(self.dispositivo)
-            self.modelo.eval() # Fundamental: Modo lectura, no escritura
-            self.get_logger().info(f"Modelo cargado correctamente en {self.dispositivo}!")
+            self.modelo.eval() # MODO EVALUACION 
+            self.get_logger().info(f"Modelo cargado en {self.dispositivo}")
         except Exception as e:
             self.get_logger().error(f"Error cargando el modelo: {e}")
             raise e
+        ##Hasta aqui se ha cargado el modelo en memoria y se han aplicado los pesos del .pth
         
-        # --- REGLAS DE VISIÓN (Sin el recorte, lo haremos manual en cv2) ---
         self.transformaciones = transforms.Compose([
             transforms.Resize((64, 64)),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
         ])
         
-        # --- CONEXIONES ROS2 ---
-        self.sub_camara = self.create_subscription(Image, '/camera/image_raw', self.conducir, 10)
-        self.pub_cmd_vel = self.create_publisher(Twist, '/cmd_vel', 10)
+       
+        self.sub_camara = self.create_subscription(
+            Image, 
+            '/camera/image_raw', 
+            self.conducir, 
+            10
+        )
         
-        self.velocidad_lineal = 0.15 # Velocidad constante de avance
-        self.get_logger().info("Piloto IA listo. Esperando imágenes de la cámara...")
+        self.pub_cmd_vel = self.create_publisher(
+            Twist, 
+            '/cmd_vel', 
+            10
+        )
+        
+        ################VELOCIDAD (POR AHORA CONSTANTE)
+        self.velocidad_lineal = 0.25 
 
     def conducir(self, msg):
+        ### CADA VEZ QUE EL ROBOT PUBLICA UN FRAME DE LA CAMARA ###
         try:
-            # 1. Extraer foto de ROS2
+            ##Preprocesar la imagen (lo que se hace con las de entrenamiento)
+            ##Recortar a la mitad, normalizar colores y convertir a tensor
             imagen_cv = self.bridge.imgmsg_to_cv2(msg, "bgr8")
-            
-            # 2. Recortar físicamente el techo (la mitad superior)
             alto = imagen_cv.shape[0]
             imagen_recortada = imagen_cv[alto//2:, :]
-            
-            # 3. Pasar de BGR (OpenCV) a RGB (PIL) para PyTorch
             imagen_rgb = cv2.cvtColor(imagen_recortada, cv2.COLOR_BGR2RGB)
             imagen_pil = PILImage.fromarray(imagen_rgb)
-            
-            # 4. Aplicar tensores y añadir dimensión de Batch (1, 3, 64, 64)
             tensor_entrada = self.transformaciones(imagen_pil).unsqueeze(0).to(self.dispositivo)
             
-            # 5. INFERENCIA (Pensar)
             with torch.no_grad():
-                salida_logits = self.modelo(tensor_entrada)
-                # Extraemos directamente el número continuo del tensor
+                salida_logits = self.modelo(tensor_entrada) #LLAMAR AL MODELO Y PREDECIR LA VELOCIDAD ANGULAR
                 giro_estimado = salida_logits.item()
                 
-            # 6. TRADUCCIÓN A FÍSICA (Inyección directa)
+            #Enviar el mensaje al robot
             msg_cmd = Twist()
             msg_cmd.linear.x = self.velocidad_lineal
             msg_cmd.angular.z = float(giro_estimado)
-                
-            # 7. PUBLICAR COMANDO Y LOGUEAR
             self.pub_cmd_vel.publish(msg_cmd)
-            self.get_logger().info(f'Acción IA (Volante analógico): {giro_estimado:.2f} rad/s')
+            self.get_logger().info(f'Giro enviado: {giro_estimado:.2f} rad/s')
             
         except Exception as e:
             self.get_logger().error(f"Error en el bucle de conducción: {e}")
