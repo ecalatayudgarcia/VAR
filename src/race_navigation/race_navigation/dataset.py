@@ -7,6 +7,8 @@ import cv2
 import os
 import csv
 
+APPEND = True
+
 class NodoRecolector(Node):
     def __init__(self):
         super().__init__('nodo_recolector_datos')
@@ -14,7 +16,8 @@ class NodoRecolector(Node):
         self.giro_actual = 0.0
         self.velocidad_actual = 0.0
         
-        self.contador_frames = 0
+        self.contador_frames = 24277 
+        
         self.frecuencia_guardado = 3 # Se guardan 1 de cada 3 frames 
         self.directorio_datos = './src/dataset_carrera'
         self.archivo_csv = f'{self.directorio_datos}/registro_conduccion.csv'
@@ -22,9 +25,15 @@ class NodoRecolector(Node):
         if not os.path.exists(self.directorio_datos):
             os.makedirs(self.directorio_datos)
 
-        with open(self.archivo_csv, 'w', newline='') as f:
-            escritor = csv.writer(f)
-            escritor.writerow(['nombre_imagen', 'velocidad_angular_z'])
+        
+        if os.path.exists(self.archivo_csv) and self.contador_frames > 0:
+            self.get_logger().info(f"CSV detectado. Añadiendo datos a partir del frame {self.contador_frames}")
+        else:
+            self.get_logger().info("Creando dataset NUEVO")
+            self.contador_frames = 0 
+            with open(self.archivo_csv, 'w', newline='') as f:
+                escritor = csv.writer(f)
+                escritor.writerow(['nombre_imagen', 'velocidad_angular_z'])
             
      
         self.bridge = CvBridge() #necesario para transformar la imagenes
