@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader
 import torch.optim as optim
 import pandas as pd
 import os
+import sys
 
 
 class ProcesadorDataset(Dataset): ##Esta clase se instancia y prepara los tensores (datos, imagenes y csv)
@@ -77,6 +78,11 @@ class ModeloPiloto(nn.Module):
         return x
 
 if __name__ == '__main__':
+    
+   
+
+
+    
     dispositivo = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Entrenando en: {dispositivo}")
     csv_path = '../src/dataset_carrera/registro_conduccion.csv'
@@ -89,11 +95,23 @@ if __name__ == '__main__':
     ##El .to reserva la memoria de toda la clase (todas las matrices de la red)
     ##En la GPU
     modelo = ModeloPiloto().to(dispositivo)
+        
     criterio = nn.MSELoss() # Error Cuadrático Medio para regresión continua
     optimizador = optim.Adam(modelo.parameters(), lr=0.001)
 
-
     epochs = 20
+
+    if len(sys.argv) > 1 and sys.argv[1] == '--fine-tuning':
+        #En este caso hay que bajar el learning rate
+        #ajustar menos los pesos
+        #el modelo ya sabe conducir asique no se puede cambiar demasiado si no volvera a fallar
+        
+        pesos_guardados = torch.load('modelo_base.pth',weights_only=True)
+        modelo.load_state_dict(pesos_guardados)
+        optimizador = optim.Adam(modelo.parameters(), lr=1e-4)
+        epochs = 5
+        print("Modelo cargado. Se va a entrenar con fine tuning")
+
     print("Iniciando entrenamiento...")
 
     for epoch in range(epochs):
