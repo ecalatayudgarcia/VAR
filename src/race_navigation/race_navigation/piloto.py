@@ -84,7 +84,7 @@ class PilotoAutonomo(Node):
         )
         
         ################VELOCIDAD (POR AHORA CONSTANTE)
-        self.velocidad_lineal = 0.25 
+        self.velocidad_lineal = 0.55 
 
     def conducir(self, msg):
         ### CADA VEZ QUE EL ROBOT PUBLICA UN FRAME DE LA CAMARA ###
