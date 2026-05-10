@@ -1,6 +1,6 @@
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, LaserScan 
 from geometry_msgs.msg import Twist
 from cv_bridge import CvBridge
 import cv2
@@ -9,6 +9,8 @@ import torch.nn as nn
 from torchvision import transforms
 from PIL import Image as PILImage
 from ultralytics import YOLO # Librería de detección de objetos
+import numpy as np # Útil para procesar los datos del láser
+from rclpy.qos import QoSProfile, ReliabilityPolicy
 
 class ModeloPiloto(nn.Module):
     '''
@@ -74,18 +76,50 @@ class PilotoAutonomo(Node):
         ])
         
         self.sub_camara = self.create_subscription(Image, '/camera/image_raw', self.conducir, 10)
+        qos_profile = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            depth=10
+        )
+        
+        # Nos suscribimos al tópico REAL (/scan) usando el perfil QoS
+        self.sub_laser = self.create_subscription(
+            LaserScan, 
+            '/scan', # <--- VOLVEMOS AL BUENO
+            self.leer_laser, 
+            qos_profile
+        )
         self.pub_cmd_vel = self.create_publisher(Twist, '/cmd_vel', 10)
         
         ################VELOCIDAD (POR AHORA CONSTANTE)
         self.velocidad_lineal = 0.55 
         
-        # --- NUEVA LÓGICA ACUMULATIVA DE ESTADOS ---
-        # 0 = CNN Conduce | 1 = Esquivando (YOLO ve) | 2 = Rebasando (Ir recto) | 3 = Volviendo
-        self.estado_maniobra = 0 
-        self.frames_girados = 0     # Memoria de cuánto hemos girado
-        self.frames_rebasando = 0   # Cronómetro para ir recto por el lado
-        self.giro_actual = 0.0      # Dirección del giro suave
+        # Control de maniobras de adelantamiento
+        self.maniobra_activa = False
+        self.frames_maniobra = 0
+        self.giro_esquiva = 0.0
         
+        # Almacén para los datos del láser
+        self.hueco_izq = 0.0
+        self.hueco_der = 0.0
+
+    def leer_laser(self, msg):
+        '''
+        Callback para procesar los datos del LIDAR.
+        Divide el escaneo en dos mitades para medir dónde hay más espacio.
+        '''
+        self.get_logger().info(f"Rayo 0 en: {msg.angle_min} rad | Avance: {msg.angle_increment} rad")
+        # Limpiamos los datos de infinitos (lecturas fuera de rango)
+        lecturas = np.array(msg.ranges)
+        lecturas = np.where(np.isinf(lecturas) | np.isnan(lecturas), msg.range_max, lecturas)
+
+        total_rayos = len(lecturas)
+        cuarto = total_rayos // 4 # Cogemos solo un 25% de los rayos (90 grados)
+
+        # El rayo [0] es el frente. 
+        # Del [0] al [cuarto] es el cono delantero IZQUIERDO.
+        # Los últimos rayos del array ([-cuarto:]) es el cono delantero DERECHO.
+        self.hueco_izq = np.mean(lecturas[0:cuarto])
+        self.hueco_der = np.mean(lecturas[-cuarto:])
 
     def conducir(self, msg):
         ### CADA VEZ QUE EL ROBOT PUBLICA UN FRAME DE LA CAMARA ###
@@ -110,74 +144,52 @@ class PilotoAutonomo(Node):
                 caja = resultados_yolo[0].boxes[0].xyxy[0].cpu().numpy()
                 ancho_caja = caja[2] - caja[0]  # x_fin - x_ini
                 y_abajo_caja = caja[3]
-                
-                # Si la persona está cerca (>15% de la pantalla) y tocando la mitad inferior
+                # Si la persona está cerca (>15% de la pantalla)
                 if ancho_caja > (ancho_imagen * 0.15) and y_abajo_caja > (alto * 0.5):
                     persona_detectada = True
-                    centro_persona_x = (caja[0] + caja[2]) / 2.0
 
-            msg_cmd = Twist()
-
-            # ==========================================
-            # 2. MÁQUINA DE ESTADOS ACUMULATIVA
-            # ==========================================
-            if persona_detectada:
-                # ESTADO 1: Vemos a la persona, nos apartamos suavemente
-                self.estado_maniobra = 1
-                self.frames_girados += 1  # Guardamos en memoria este fotograma de giro
+            # 2. INICIO DE LA MANIOBRA DE ADELANTAMIENTO
+            # Si vemos persona y NO estábamos ya esquivando, disparamos la macro
+            if persona_detectada and not self.maniobra_activa:
+                self.maniobra_activa = True
+                self.frames_maniobra = 0
                 
-                """Si el centro de toda la imagen fuera 640, el centro sería 320, entonces si el cálculo del centro de la persona es 200
-                significaría que esa persona está a la izquierda del carril"""
-                if centro_persona_x < (ancho_imagen / 2.0):
-                    self.giro_actual = -0.4 # Giro SUAVE a la Derecha
+                """El láser escanea el entorno y calcula la distancia media a los obstáculos. 
+                Si la media de espacio libre a la izquierda es mayor que a la derecha, giramos a la izquierda."""
+                if self.hueco_izq > self.hueco_der:
+                    self.giro_esquiva = 0.7  # Izquierda libre -> Volantazo Izquierda
                 else:
-                    self.giro_actual = 0.4  # Giro SUAVE a la Izquierda
+                    self.giro_esquiva = -0.7 # Derecha libre -> Volantazo Derecha
                     
-                msg_cmd.linear.x = 0.35 # Reducimos velocidad un poco
-                msg_cmd.angular.z = self.giro_actual
-                self.get_logger().info(f'Apartándome... (Memoria: {self.frames_girados} frames)')
-                self.pub_cmd_vel.publish(msg_cmd)
-                return
+                self.get_logger().warn('¡OBSTÁCULO! Iniciando macro de adelantamiento ciego con láser...')
 
-            else:
-                # NO VEMOS A LA PERSONA. Evaluamos en qué estado estábamos.
+            # 3. EJECUCIÓN DE LA MANIOBRA CIEGA (Sobreescribe a la CNN)
+            msg_cmd = Twist()
+            
+            if self.maniobra_activa:
+                self.frames_maniobra += 1
+                msg_cmd.linear.x = 0.45 # Vamos más despacio al esquivar
                 
-                if self.estado_maniobra == 1:
-                    # ESTADO 2 (Transición): Acabamos de perderla de vista. Iniciamos rebase ciego.
-                    self.estado_maniobra = 2
-                    self.frames_rebasando = 0
-                    self.get_logger().info('Persona fuera de cámara. Iniciando rebase ciego.')
-                    
-                if self.estado_maniobra == 2:
-                    # ESTADO 2 (Ejecución): Vamos RECTO por el lado durante 30 frames
-                    self.frames_rebasando += 1
-                    msg_cmd.linear.x = 0.35
+                if self.frames_maniobra < 15:
+                    # FASE 1: Apartarse del obstáculo
+                    msg_cmd.angular.z = self.giro_esquiva
+                elif self.frames_maniobra < 90:
+                    # FASE 2: Ir recto en paralelo (El robot pasa por el lado a ciegas)
                     msg_cmd.angular.z = 0.0
-                    
-                    if self.frames_rebasando > 50: # (Sube este 30 si el coche roza a la persona de lado)
-                        self.estado_maniobra = 3 # Terminamos de rebasar, toca volver
-                    
-                    self.pub_cmd_vel.publish(msg_cmd)
-                    return
-                    
-                if self.estado_maniobra == 3:
-                    # ESTADO 3: Devolvemos el volante los MISMOS frames que acumulamos en el Estado 1
-                    if self.frames_girados > 0:
-                        self.frames_girados -= 1
-                        msg_cmd.linear.x = 0.35
-                        msg_cmd.angular.z = -self.giro_actual # Giro inverso exacto
-                        self.get_logger().info(f'Volviendo al carril... (Faltan {self.frames_girados} frames)')
-                        self.pub_cmd_vel.publish(msg_cmd)
-                        return
-                    else:
-                        # Ya hemos devuelto todo el giro. Fin de la maniobra.
-                        self.estado_maniobra = 0
-                        self.get_logger().info('¡Adelantamiento perfecto! CNN toma el control.')
+                elif self.frames_maniobra < 105:
+                    # FASE 3: Volantazo de regreso al carril
+                    msg_cmd.angular.z = -self.giro_esquiva
+                else:
+                    # FASE 4: Fin. Devolvemos el control
+                    self.maniobra_activa = False
+                    self.get_logger().info('Adelantamiento completado. Devolviendo control a CNN.')
+                
+                # Publicamos y abortamos para que la CNN no haga nada
+                self.pub_cmd_vel.publish(msg_cmd)
+                return 
 
-            # ==========================================
-            # ESTADO 0: CONDUCCIÓN NORMAL POR RED NEURONAL
-            # ==========================================
-            if self.estado_maniobra == 0:
+            # ESTADO NORMAL: CONDUCCIÓN POR RED NEURONAL (Si no hay maniobra activa)
+            if not self.maniobra_activa:
                 imagen_recortada = imagen_cv[alto//2:, :]
                 imagen_rgb = cv2.cvtColor(imagen_recortada, cv2.COLOR_BGR2RGB)
                 imagen_pil = PILImage.fromarray(imagen_rgb)
