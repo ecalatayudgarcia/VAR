@@ -84,7 +84,7 @@ class PilotoAutonomo(Node):
         # Nos suscribimos al tópico REAL (/scan) usando el perfil QoS
         self.sub_laser = self.create_subscription(
             LaserScan, 
-            '/scan', # <--- VOLVEMOS AL BUENO
+            '/scan', 
             self.leer_laser, 
             qos_profile
         )
@@ -107,7 +107,6 @@ class PilotoAutonomo(Node):
         Callback para procesar los datos del LIDAR.
         Divide el escaneo en dos mitades para medir dónde hay más espacio.
         '''
-        self.get_logger().info(f"Rayo 0 en: {msg.angle_min} rad | Avance: {msg.angle_increment} rad")
         # Limpiamos los datos de infinitos (lecturas fuera de rango)
         lecturas = np.array(msg.ranges)
         lecturas = np.where(np.isinf(lecturas) | np.isnan(lecturas), msg.range_max, lecturas)
@@ -133,6 +132,10 @@ class PilotoAutonomo(Node):
             # 1. VISION YOLO
             resultados_yolo = self.yolo.predict(imagen_cv, classes=[0], verbose=False) # Devuelve array con el resultado para cada imagen, como es solo un frame pues solo devuelve un elemento
             persona_detectada = False
+            limite_izq = ancho_imagen * 0.30
+            limite_der = ancho_imagen * 0.70
+            cv2.line(imagen_cv, (int(limite_izq), 0), (int(limite_izq), alto), (255, 0, 0), 2)
+            cv2.line(imagen_cv, (int(limite_der), 0), (int(limite_der), alto), (255, 0, 0), 2)
             
             if len(resultados_yolo[0].boxes) > 0:
                 """ Cogemos el resultado de la primera imagen (y única) [0], la primera persona detectada [0] (una foto puede tener 10 personas)
@@ -144,10 +147,23 @@ class PilotoAutonomo(Node):
                 caja = resultados_yolo[0].boxes[0].xyxy[0].cpu().numpy()
                 ancho_caja = caja[2] - caja[0]  # x_fin - x_ini
                 y_abajo_caja = caja[3]
+                centro_persona_x = (caja[0] + caja[2]) / 2.0
+
+                cv2.circle(imagen_cv, (int(centro_persona_x), int(y_abajo_caja)), 8, (0, 0, 255), -1)
+        
                 # Si la persona está cerca (>15% de la pantalla)
                 if ancho_caja > (ancho_imagen * 0.15) and y_abajo_caja > (alto * 0.5):
-                    persona_detectada = True
+                    if centro_persona_x > limite_izq and centro_persona_x < limite_der:
+                        persona_detectada = True
+                        cv2.putText(imagen_cv, "¡PELIGRO!", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                    else:
+                        if not self.maniobra_activa:
+                            cv2.putText(imagen_cv, "IGNORANDO (Arcen)", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
+            # MOSTRAMOS LA PANTALLA EN TIEMPO REAL
+            cv2.imshow("Ojos del Robot", imagen_cv)
+            cv2.waitKey(1) # Necesario para que la ventana de cv2 se actualice
+            
             # 2. INICIO DE LA MANIOBRA DE ADELANTAMIENTO
             # Si vemos persona y NO estábamos ya esquivando, disparamos la macro
             if persona_detectada and not self.maniobra_activa:
