@@ -31,6 +31,8 @@ services:
     privileged: true
     stdin_open: true
     tty: true
+    devices:
+        - /dev/input/js0:/dev/input/js0
 
     # Configuración de GPU explícita
     deploy:

@@ -16,7 +16,7 @@ class NodoRecolector(Node):
         self.giro_actual = 0.0
         self.velocidad_actual = 0.0
         
-        self.contador_frames = 24277 
+        self.contador_frames = 0 
         
         self.frecuencia_guardado = 3 # Se guardan 1 de cada 3 frames 
         self.directorio_datos = './src/dataset_carrera'

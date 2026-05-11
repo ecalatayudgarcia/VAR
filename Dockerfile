@@ -20,7 +20,12 @@ RUN apt-get update && apt-get install -y \
     libgl1-mesa-dri \
     libglu1-mesa \
     x11-apps \
+    python3-pip \
     && rm -rf /var/lib/apt/lists/*
+
+RUN pip install torch torchvision pandas pillow --break-system-packages
+RUN pip ultralytics --break-system-packages --ignore-installed numpy
+RUN pip install "numpy<2" --break-system-packages
 
 # Instalar dependencias y compilar 
 RUN apt-get update && rosdep update && \
