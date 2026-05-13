@@ -51,7 +51,7 @@ class PilotoAutonomo(Node):
         
         # --- CARGA DEL MODELO CNN ORIGINAL ---
         self.modelo = ModeloPiloto()
-        nombre_modelo = 'modelo_bomba.pth' 
+        nombre_modelo = 'modelo_piloto.pth' 
         self.declare_parameter('archivo_modelo', nombre_modelo)
         self.archivo_modelo = self.get_parameter('archivo_modelo').get_parameter_value().string_value
         self.ruta_modelo = f'/home/ros2_ws/src/race_navigation/race_navigation/{self.archivo_modelo}'
@@ -76,18 +76,6 @@ class PilotoAutonomo(Node):
         ])
         
         self.sub_camara = self.create_subscription(Image, '/camera/image_raw', self.conducir, 10)
-        qos_profile = QoSProfile(
-            reliability=ReliabilityPolicy.BEST_EFFORT,
-            depth=10
-        )
-        
-        # Nos suscribimos al tópico REAL (/scan) usando el perfil QoS
-        self.sub_laser = self.create_subscription(
-            LaserScan, 
-            '/scan', 
-            self.leer_laser, 
-            qos_profile
-        )
         self.pub_cmd_vel = self.create_publisher(Twist, '/cmd_vel', 10)
         
         ################VELOCIDAD (POR AHORA CONSTANTE)
@@ -97,10 +85,8 @@ class PilotoAutonomo(Node):
         self.maniobra_activa = False
         self.frames_maniobra = 0
         self.giro_esquiva = 0.0
+        self.ultimo_giro_cnn = 0.0
         
-        # Almacén para los datos del láser
-        self.hueco_izq = 0.0
-        self.hueco_der = 0.0
 
     def leer_laser(self, msg):
         '''
@@ -132,10 +118,6 @@ class PilotoAutonomo(Node):
             # 1. VISION YOLO
             resultados_yolo = self.yolo.predict(imagen_cv, classes=[0], verbose=False) # Devuelve array con el resultado para cada imagen, como es solo un frame pues solo devuelve un elemento
             persona_detectada = False
-            limite_izq = ancho_imagen * 0.30
-            limite_der = ancho_imagen * 0.70
-            cv2.line(imagen_cv, (int(limite_izq), 0), (int(limite_izq), alto), (255, 0, 0), 2)
-            cv2.line(imagen_cv, (int(limite_der), 0), (int(limite_der), alto), (255, 0, 0), 2)
             
             if len(resultados_yolo[0].boxes) > 0:
                 """ Cogemos el resultado de la primera imagen (y única) [0], la primera persona detectada [0] (una foto puede tener 10 personas)
@@ -147,35 +129,53 @@ class PilotoAutonomo(Node):
                 caja = resultados_yolo[0].boxes[0].xyxy[0].cpu().numpy()
                 ancho_caja = caja[2] - caja[0]  # x_fin - x_ini
                 y_abajo_caja = caja[3]
-                centro_persona_x = (caja[0] + caja[2]) / 2.0
 
-                cv2.circle(imagen_cv, (int(centro_persona_x), int(y_abajo_caja)), 8, (0, 0, 255), -1)
+                centro_persona_x = (caja[0] + caja[2]) / 2.0
         
                 # Si la persona está cerca (>15% de la pantalla)
-                if ancho_caja > (ancho_imagen * 0.15) and y_abajo_caja > (alto * 0.5):
-                    if centro_persona_x > limite_izq and centro_persona_x < limite_der:
-                        persona_detectada = True
-                        cv2.putText(imagen_cv, "¡PELIGRO!", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-                    else:
-                        if not self.maniobra_activa:
-                            cv2.putText(imagen_cv, "IGNORANDO (Arcen)", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                if ancho_caja > (ancho_imagen * 0.22) and y_abajo_caja > (alto * 0.5):
+                    persona_detectada = True
 
-            # MOSTRAMOS LA PANTALLA EN TIEMPO REAL
-            cv2.imshow("Ojos del Robot", imagen_cv)
-            cv2.waitKey(1) # Necesario para que la ventana de cv2 se actualice
-            
             # 2. INICIO DE LA MANIOBRA DE ADELANTAMIENTO
             # Si vemos persona y NO estábamos ya esquivando, disparamos la macro
             if persona_detectada and not self.maniobra_activa:
                 self.maniobra_activa = True
                 self.frames_maniobra = 0
+
+                mitad_pantalla = ancho_imagen / 2.0
+
+                self.get_logger().warn('==================================================')
+                self.get_logger().warn(f'¡OBSTÁCULO! Última velocidad angular CNN: {self.ultimo_giro_cnn:.4f}')
+                self.get_logger().warn('==================================================')
                 
                 """El láser escanea el entorno y calcula la distancia media a los obstáculos. 
                 Si la media de espacio libre a la izquierda es mayor que a la derecha, giramos a la izquierda."""
-                if self.hueco_izq > self.hueco_der:
-                    self.giro_esquiva = 0.7  # Izquierda libre -> Volantazo Izquierda
+                if centro_persona_x > mitad_pantalla:
+                    # QUEREMOS IR A LA IZQUIERDA
+                    if self.ultimo_giro_cnn > 0.3: 
+                        # Ya estábamos trazando una curva a la izquierda. Suavizamos.
+                        self.giro_esquiva = 0.4 
+                        self.get_logger().info('Suavizamos giro hacia la izquierda') 
+                    elif self.ultimo_giro_cnn < -0.3:
+                        # Estábamos trazando a la derecha. Damos un volantazo más fuerte para compensar.
+                        self.giro_esquiva = 0.9
+                    else:
+                        # Íbamos en una recta
+                        self.get_logger().info('Radicalizamos giro hacia la izquierda')
+                        self.giro_esquiva = 0.7  
                 else:
-                    self.giro_esquiva = -0.7 # Derecha libre -> Volantazo Derecha
+                    # QUEREMOS IR A LA DERECHA
+                    if self.ultimo_giro_cnn < -0.3: 
+                        # Ya estábamos trazando una curva a la derecha. Suavizamos.
+                        self.giro_esquiva = -0.4 
+                        self.get_logger().info('Suavizamos giro hacia la derecha') 
+                    elif self.ultimo_giro_cnn > 0.3:
+                        # Estábamos trazando a la izquierda. Compensamos.
+                        self.giro_esquiva = -0.9
+                        self.get_logger().info('Radicalizamos giro hacia la derecha')
+                    else:
+                        # Íbamos en una recta
+                        self.giro_esquiva = -0.7
                     
                 self.get_logger().warn('¡OBSTÁCULO! Iniciando macro de adelantamiento ciego con láser...')
 
@@ -186,15 +186,22 @@ class PilotoAutonomo(Node):
                 self.frames_maniobra += 1
                 msg_cmd.linear.x = 0.45 # Vamos más despacio al esquivar
                 
-                if self.frames_maniobra < 15:
-                    # FASE 1: Apartarse del obstáculo
-                    msg_cmd.angular.z = self.giro_esquiva
-                elif self.frames_maniobra < 90:
-                    # FASE 2: Ir recto en paralelo (El robot pasa por el lado a ciegas)
+                if self.frames_maniobra < 22:
+                    # FASE 0 : Delay de acercamiento. Seguir recto un poco más.
                     msg_cmd.angular.z = 0.0
-                elif self.frames_maniobra < 105:
-                    # FASE 3: Volantazo de regreso al carril
+                    self.get_logger().info('Delay extremo.')
+                elif self.frames_maniobra < 38:
+                    # FASE 1: Apartarse del obstáculo (Tarda 15 frames, igual que antes)
+                    msg_cmd.angular.z = self.giro_esquiva
+                    self.get_logger().info('Esquivando...')
+                elif self.frames_maniobra < 106:
+                    # FASE 2: Ir recto en paralelo (Tarda 75 frames, igual que antes)
+                    self.get_logger().info('Rebasando recto...')
+                    msg_cmd.angular.z = 0.0
+                elif self.frames_maniobra < 121:
+                    # FASE 3: Volantazo de regreso al carril (Tarda 15 frames, igual que antes)
                     msg_cmd.angular.z = -self.giro_esquiva
+                    self.get_logger().info('Volviendo al carril...')
                 else:
                     # FASE 4: Fin. Devolvemos el control
                     self.maniobra_activa = False
@@ -202,7 +209,7 @@ class PilotoAutonomo(Node):
                 
                 # Publicamos y abortamos para que la CNN no haga nada
                 self.pub_cmd_vel.publish(msg_cmd)
-                return 
+                return
 
             # ESTADO NORMAL: CONDUCCIÓN POR RED NEURONAL (Si no hay maniobra activa)
             if not self.maniobra_activa:
@@ -214,7 +221,9 @@ class PilotoAutonomo(Node):
                 with torch.no_grad():
                     salida_logits = self.modelo(tensor_entrada) #LLAMAR AL MODELO Y PREDECIR LA VELOCIDAD ANGULAR
                     giro_estimado = salida_logits.item()
-                    
+                
+                self.ultimo_giro_cnn = float(giro_estimado)
+
                 #Enviar el mensaje al robot
                 msg_cmd.linear.x = self.velocidad_lineal
                 msg_cmd.angular.z = float(giro_estimado)
