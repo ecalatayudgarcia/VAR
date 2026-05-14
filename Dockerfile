@@ -21,18 +21,18 @@ RUN apt-get update && apt-get install -y \
     libglu1-mesa \
     x11-apps \
     python3-pip \
+    libopencv-dev \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install torch torchvision pandas pillow --break-system-packages
-RUN pip ultralytics --break-system-packages --ignore-installed numpy
+RUN pip install ultralytics --break-system-packages --ignore-installed numpy
 RUN pip install "numpy<2" --break-system-packages
 
 # Instalar dependencias y compilar 
 RUN apt-get update && rosdep update && \
     rosdep install --from-paths src --ignore-src -r -y && \
     . /opt/ros/jazzy/setup.sh && \
-    colcon build --symlink-install && \
-    colcon build && \
+    colcon build --packages-skip listener && \
     rm -rf /var/lib/apt/lists/*
 
 # Configuración del entorno (Bashrc)
