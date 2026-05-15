@@ -21,17 +21,8 @@ class ProcesadorDataset(Dataset): ##Esta clase se instancia y prepara los tensor
         self.transformaciones = transforms.Compose([
             transforms.Lambda(lambda img: img.crop((0, img.height//2, img.width, img.height))),
             transforms.Resize((64, 64)),
-            # --- DATA AUGMENTATION SUTIL ---
-            # Variamos brillo y contraste un 20% para aguantar sombras de personas
-            transforms.ColorJitter(brightness=0.2, contrast=0.2),
-            # Rotación de solo 5º y Zoom de solo el 5% (0.95 a 1.05) para no perder las líneas
-            transforms.RandomAffine(degrees=5, scale=(0.95, 1.05)),
-            # -------------------------------
             transforms.ToTensor(),
-            transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
-            # Simula oclusiones (como una persona tapando parte del carril)
-            # p=0.3 significa que solo se aplica al 30% de las imágenes cada vez
-            transforms.RandomErasing(p=0.3, scale=(0.02, 0.1), value=0)
+            transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
         ])
 
     def __len__(self):

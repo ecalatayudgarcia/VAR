@@ -26,7 +26,8 @@ setup(
         'console_scripts': [
             'ekf = race_navigation.ekf:main',
             'recolector = race_navigation.dataset:main',
-            'piloto = race_navigation.piloto:main'
+            'piloto_cnn = race_navigation.piloto_cnn:main',
+            'piloto_logica = race_navigation.piloto_logica:main'
         ],
     },
 )

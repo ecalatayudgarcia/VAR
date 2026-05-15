@@ -9,7 +9,7 @@ import torch.nn as nn
 from torchvision import transforms
 from PIL import Image as PILImage
 from ultralytics import YOLO # Librería de detección de objetos
-import numpy as np # Útil para procesar los datos del láser
+import numpy as np 
 from rclpy.qos import QoSProfile, ReliabilityPolicy
 
 class ModeloPiloto(nn.Module):
@@ -86,25 +86,6 @@ class PilotoAutonomo(Node):
         self.frames_maniobra = 0
         self.giro_esquiva = 0.0
         self.ultimo_giro_cnn = 0.0
-        
-
-    def leer_laser(self, msg):
-        '''
-        Callback para procesar los datos del LIDAR.
-        Divide el escaneo en dos mitades para medir dónde hay más espacio.
-        '''
-        # Limpiamos los datos de infinitos (lecturas fuera de rango)
-        lecturas = np.array(msg.ranges)
-        lecturas = np.where(np.isinf(lecturas) | np.isnan(lecturas), msg.range_max, lecturas)
-
-        total_rayos = len(lecturas)
-        cuarto = total_rayos // 4 # Cogemos solo un 25% de los rayos (90 grados)
-
-        # El rayo [0] es el frente. 
-        # Del [0] al [cuarto] es el cono delantero IZQUIERDO.
-        # Los últimos rayos del array ([-cuarto:]) es el cono delantero DERECHO.
-        self.hueco_izq = np.mean(lecturas[0:cuarto])
-        self.hueco_der = np.mean(lecturas[-cuarto:])
 
     def conducir(self, msg):
         ### CADA VEZ QUE EL ROBOT PUBLICA UN FRAME DE LA CAMARA ###
