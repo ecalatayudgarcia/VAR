@@ -162,7 +162,7 @@ class PilotoAutonomo(Node):
                     else:
                         # Íbamos en una recta
                         self.get_logger().info('Radicalizamos giro hacia la izquierda')
-                        self.giro_esquiva = 0.7  
+                        self.giro_esquiva = 1.0  
                 else:
                     # QUEREMOS IR A LA DERECHA
                     if self.ultimo_giro_cnn < -0.3: 
@@ -175,7 +175,7 @@ class PilotoAutonomo(Node):
                         self.get_logger().info('Radicalizamos giro hacia la derecha')
                     else:
                         # Íbamos en una recta
-                        self.giro_esquiva = -0.7
+                        self.giro_esquiva = -1.0
                     
                 self.get_logger().warn('¡OBSTÁCULO! Iniciando macro de adelantamiento ciego con láser...')
 
@@ -184,23 +184,19 @@ class PilotoAutonomo(Node):
             
             if self.maniobra_activa:
                 self.frames_maniobra += 1
-                msg_cmd.linear.x = 0.45 # Vamos más despacio al esquivar
+                msg_cmd.linear.x = 0.20 # Vamos más despacio al esquivar
                 
-                if self.frames_maniobra < 22:
-                    # FASE 0 : Delay de acercamiento. Seguir recto un poco más.
-                    msg_cmd.angular.z = 0.0
-                    self.get_logger().info('Delay extremo.')
-                elif self.frames_maniobra < 38:
+                if self.frames_maniobra < 15:
                     # FASE 1: Apartarse del obstáculo (Tarda 15 frames, igual que antes)
                     msg_cmd.angular.z = self.giro_esquiva
                     self.get_logger().info('Esquivando...')
-                elif self.frames_maniobra < 106:
+                elif self.frames_maniobra < 70:
                     # FASE 2: Ir recto en paralelo (Tarda 75 frames, igual que antes)
                     self.get_logger().info('Rebasando recto...')
                     msg_cmd.angular.z = 0.0
-                elif self.frames_maniobra < 121:
+                elif self.frames_maniobra < 85:
                     # FASE 3: Volantazo de regreso al carril (Tarda 15 frames, igual que antes)
-                    msg_cmd.angular.z = -self.giro_esquiva
+                    msg_cmd.angular.z = -0.6
                     self.get_logger().info('Volviendo al carril...')
                 else:
                     # FASE 4: Fin. Devolvemos el control
@@ -222,7 +218,7 @@ class PilotoAutonomo(Node):
                     salida_logits = self.modelo(tensor_entrada) #LLAMAR AL MODELO Y PREDECIR LA VELOCIDAD ANGULAR
                     giro_estimado = salida_logits.item()
                 
-                self.ultimo_giro_cnn = float(giro_estimado)
+                self.ultimo_giro_cnn = 0
 
                 #Enviar el mensaje al robot
                 msg_cmd.linear.x = self.velocidad_lineal
