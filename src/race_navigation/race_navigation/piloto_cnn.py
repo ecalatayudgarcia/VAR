@@ -100,7 +100,7 @@ class PilotoAutonomo(Node):
             if len(resultados_yolo[0].boxes) > 0:
                 self.velocidad_lineal = 0.30
             else:
-                self.velocidad_lineal = 0.55 
+                self.velocidad_lineal = 0.75 
 
             alto = imagen_cv.shape[0]
             imagen_recortada = imagen_cv[alto//2:, :]

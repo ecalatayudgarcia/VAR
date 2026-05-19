@@ -1,0 +1,500 @@
+\documentclass[11pt,letterpaper, onecolumn]{article}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{xcolor}
+\usepackage{soul}
+\usepackage{url}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning}
+\usepackage[style=apa, backend=biber]{biblatex}
+\addbibresource{referencias.bib} % tu archivo .bib
+\usepackage{hyperref}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{fancyhdr}
+\usepackage{array} 
+\usepackage[spanish]{babel}
+\usepackage{listings}
+%\usepackage[strings]{underscore}
+%\usepackage[lmargin=71pt, tmargin=1.2in]{geometry}  %For centering solution box
+
+
+\usepackage[T1]{fontenc}
+
+
+
+%\renewcommand{\familydefault}{\sfdefault} % Cambia a sans serif
+
+\renewcommand{\lstlistingname}{} % Elimina "Listing"
+
+\setlength{\parskip}{8pt} % Ajusta la cantidad de espacio entre párrafos
+\definecolor{myhighlight}{RGB}{255,255,150}  % amarillo suave
+
+\lstdefinestyle{cppstyle}{
+    language=C++,
+    backgroundcolor=\color{gray!5},   
+    commentstyle=\color{green!60!black}\itshape,
+    keywordstyle=\color{blue!80!black}\bfseries,
+    numberstyle=\tiny\color{gray!70},
+    stringstyle=\color{orange!90!black},
+    basicstyle=\ttfamily\small,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=8pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=4,
+    frame=leftline,
+    framerule=2pt,
+    rulecolor=\color{blue!60},
+    xleftmargin=20pt,
+    framexleftmargin=15pt,
+    aboveskip=15pt,
+    belowskip=15pt,
+    columns=flexible,
+    escapeinside={(*@}{@*)},
+    morekeywords={std, string, cout, cin, endl, vector} % Palabras clave extra si las necesitas
+}
+
+
+\usepackage{tcolorbox}
+\tcbuselibrary{listings, skins, breakable}
+
+
+\newtcblisting{terminal}[2][bash -- 80x24]{%
+    listing engine=listings,
+    listing only,
+    colback=gray!15,
+    colframe=gray!50,
+    fonttitle=\bfseries\sffamily\small,
+    title={\hfill #1\hfill},
+    coltitle=gray!70,
+    left=3mm,
+    right=3mm,
+    top=2mm,
+    bottom=2mm,
+    toptitle=1mm,
+    bottomtitle=1mm,
+    boxrule=0.5mm,
+    enhanced,
+    rounded corners,
+    before upper=\vspace{0pt},  % sin espacio extra
+    listing options={
+        basicstyle=\ttfamily\small,
+        breaklines=true,
+        keepspaces=true,
+        columns=fullflexible,    % o fixed si prefieres, aquí no causa el bug
+        breakatwhitespace=false,
+        tabsize=4,
+    },
+    overlay={
+        \fill[red!70] ([xshift=6mm, yshift=-3.5mm]frame.north west) circle (2.5pt);
+        \fill[yellow!70] ([xshift=11.5mm, yshift=-3.5mm]frame.north west) circle (2.5pt);
+        \fill[green!70] ([xshift=17mm, yshift=-3.5mm]frame.north west) circle (2.5pt);
+    },
+    #2
+}
+
+\pagestyle{fancy} % activar fancyhdr para todas las páginas
+\fancyhf{} % limpia encabezados y pies
+\fancyhead[L]{VAR - Práctica 1} % izquierdo
+\fancyhead[R]{\textit{Enrique Calatayud García, Daniel Mesas Navas}} % derecho
+\fancyfoot[C]{\thepage} % número de página centrado en pie
+\renewcommand{\headrulewidth}{0pt} % Esto elimina la linea del encabezado
+\thispagestyle{empty}   %For removing header/footer from page 1
+\setcounter{tocdepth}{2}
+
+\begin{document}
+
+\begin{titlepage}
+    \thispagestyle{empty}
+    \centering
+    %\vspace*{3cm}  %Cambiado de 1cm a 3cm (usa \vspace* para forzar el espacio)
+    
+    {\LARGE \textbf{Visión Artificial y Robótica}\par}
+    {\LARGE 2025-2026\par}
+    \vspace{1cm}
+    {\Large \textbf{Práctica 1. Mapeado 3D de Interiores y Sigue Líneas}\par}
+    \vspace{2cm}
+    {\large Enrique Calatayud García\par}
+    {\large Daniel Mesas Navas\par}
+    \vspace{1cm}
+    {\large \today\par}
+    \vspace{1.5cm}
+    \includegraphics[width=0.75\textwidth]{img/logo_ua.jpg}
+    \vfill
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+\section{Introducción}
+
+Para esta práctica se propone conseguir un modelo 3D de la casa de la abuela Annie, utilizada en competiciones como Rockin \parencite[]{rockin_challenge}. Se utilizará un robot turtlebot3 el cual monta una camara Kinect para obtener nubes de puntos, las cuales se procesarán para obtener el mapeado.
+
+La arquitectura de la solución se ha construido usando ROS \parencite[]{quigley2009ros}, el cual permite gestionar la comunicación de los nodos. El entorno del robot y la toma de datos se han simulado utilizando Gazebo \parencite[]{koenig2004design}. Finalmente, el procesamiento de las nubes de puntos se ha llevado a cabo utilizando la librería Point Cloud Library (PCL) \parencite[]{rusu20113d}.
+
+Se puede consultar el vídeo que contiene la demostración de la solución en el siguiente enlace: \href{https://www.youtube.com/watch?v=e5mbaOeskFo}{Vídeo demostración}
+
+
+\section{Propuesta}
+\subsection{Arquitectura del sistema}
+
+El planteamiento inicial es obtener el conjunto de tomas del turtlebot a partir de un giro de 360º sobre sí mismo. Se experimentará con cada cuantos grados guardar las tomas. Para ello, Se ha implementado una función en el nodo \texttt{send\_velocity\_commands} llamada \texttt{giro\_360} que publica información en el topic \texttt{/cmd\_vel} del cual lee el turtlebot. Concretamente, girará a 0.5 radianes por segundo en sentido antihorario. 
+
+Parte del preprocesamiento ha sido desarrollado en el ejecutable \texttt{node} del nodo \texttt{get\_pointclouds}, el resto del pipeline y obtención del mapa final se desarrollará en otros ejecutables dentro del mismo nodo.
+
+\subsection{Pipeline}
+
+Se ha seguido el siguiente pipeline tradicional de reconocimiento de objetos:
+\begin{figure}[H]
+\centering
+\resizebox{\textwidth}{!}{% Ajusta el diagrama al ancho de la página
+%-----
+
+\begin{tikzpicture}[
+    % Distancia entre nodos: vertical y horizontal
+    node distance=1cm and 0.8cm, 
+    % Estilo de los bloques
+    box/.style={rectangle, draw, thick, fill=blue!5, text width=3.5cm, align=center, minimum height=1.2cm, rounded corners},
+    % Estilo de las flechas
+    arrow/.style={-{Latex[length=3mm, width=2mm]}, thick, draw=gray!80}
+]
+
+% FILA 1: De izquierda a derecha
+\node[box, fill=green!10] (input) {\textbf{Entrada}\\ $C_1, C_2$};
+\node[box] (preproc) [right=of input] {\textbf{1. Preprocesamiento}};
+\node[box] (keypoints) [right=of preproc] {\textbf{2. Detección}};
+\node[box] (descriptors) [right=of keypoints] {\textbf{3. Descriptores}};
+
+% FILA 2: De derecha a izquierda (forma de serpiente)
+\node[box] (matching) [below=of descriptors] {\textbf{4. Matching}};
+\node[box] (ransac) [left=of matching] {\textbf{5. RANSAC}};
+\node[box] (icp) [left=of ransac] {\textbf{6. ICP}};
+\node[box, fill=red!10] (output) [left=of icp] {\textbf{Salida}\\ Matriz $T$};
+
+% Dibujamos las flechas de la Fila 1
+\draw[arrow] (input) -- (preproc);
+\draw[arrow] (preproc) -- (keypoints);
+\draw[arrow] (keypoints) -- (descriptors);
+
+% Dibujamos la flecha que conecta Fila 1 con Fila 2
+\draw[arrow] (descriptors) -- (matching);
+
+% Dibujamos las flechas de la Fila 2
+\draw[arrow] (matching) -- (ransac);
+\draw[arrow] (ransac) -- (icp);
+\draw[arrow] (icp) -- (output);
+
+\end{tikzpicture}
+}
+
+\caption{Diagrama de flujo del pipeline de registro 3D.}
+\label{fig:pipeline_registro}
+\end{figure}
+
+La matriz de transformación local $T_i$ obtenida en cada iteración debe multiplicarse por la transformación total acumulada hasta el momento, actualizando así la referencia global: $T_T = T_T \cdot T_i$. El mapa final $M$ se construirá uniendo las nubes de puntos $C_i$ una vez aplicadas sus respectivas matrices de transformación globales:
+$$M = \bigcup_{i=1}^{t} T_T(C_i)$$.
+
+A continuación se detallarán las diferentes partes del pipeline:
+
+\subsection{Preprocesamiento}
+
+La primera parte del preprocesamiento consiste en \textbf{eliminar los puntos NaN}, estos puntos son los que produce el sensor cuando interactúa con superficies como cristales, o producen algún tipo de error. Estos puntos son innecesarios para el proceso por lo tanto se eliminan antes de guardarlos en el disco.
+
+El siguiente paso es el SubSampling, implementado a partir de \textbf{VoxelGrid}. Este método reduce drásticamente la cantidad de puntos para conseguir un tamaño manejable que permita trabajar correctamente con las nubes. VoxelGrid divide el mapa en una malla 3D de tamaño uniforme (Voxels) y devuelve un punto por cada voxel con el valor medio.
+
+Después, se guardan las nubes en disco, con el nombre \texttt{toma\_i.pcd} dentro del directorio \texttt{/home/ros2\_ws/src/nubes/scenes/}. Esto no es una parte perteneciente al preprocesamiento en sí mismo, pero facilita poder hacer las tomas, y experimentar con diferentes métodos sin necesidad de volver a tomarlas. A partir de ahora, los siguientes pasos tanto del pipeline completo como del preprocesamiento se desarrollan en otro ejecutable.
+
+A continuación se \textbf{calculan las normales} de la nube, las cuales representan la orientación de la superficie local en cada punto 3D. Este paso es un requisito fundamental para las etapas posteriores del \textit{pipeline}, específicamente para la extracción de descriptores como FPFH (\textit{Fast Point Feature Histograms}). Estos algoritmos se basan en la relación angular entre las normales de puntos vecinos para capturar la geometría tridimensional de la escena y generar una firma única para cada \textit{keypoint}. 
+
+Finalmente, se aplica un último filtrado para descartar aquellos puntos cuyas normales hayan resultado no válidas o indefinidas (NaN), estos puntos se eliminan tanto de la nube de puntos como del vector de normales obtenido.  
+
+\begin{figure}[]
+\centering
+\resizebox{\textwidth}{!}{% Ajusta el diagrama al ancho de la página
+\begin{tikzpicture}[
+    % Distancia entre nodos: vertical y horizontal
+    node distance=1cm and 0.8cm, 
+    % Estilo de los bloques
+    box/.style={rectangle, draw, thick, fill=blue!5, text width=3.5cm, align=center, minimum height=1.2cm, rounded corners},
+    % Estilo de las flechas
+    arrow/.style={-{Latex[length=3mm, width=2mm]}, thick, draw=gray!80}
+]
+
+% FILA 1: De izquierda a derecha
+\node[box, fill=green!10] (input) {\textbf{Entrada}\\ $C_1, C_2$};
+\node[box] (nan) [right=of input] {\textbf{Eliminar NaN}};
+\node[box] (voxel) [right=of nan] {\textbf{SubSampling} \\ Voxel Grid};
+\node[box] (guardado) [right=of voxel] {\textbf{Guardado en Disco}};
+
+
+% FILA 2: De derecha a izquierda (forma de serpiente)
+\node[box, fill=yellow!10] (normales) [below=of guardado] {\textbf{Cálculo de Normales}};
+\node[box, fill=yellow!10] (filtrado) [left=of normales] {\textbf{Filtrado de Normales}};
+\node[box, fill=red!10] (detector) [left=of filtrado] {\textbf{Detector}};
+
+% Dibujamos las flechas de la Fila 1
+\draw[arrow] (input) -- (nan);
+\draw[arrow] (nan) -- (voxel);
+\draw[arrow] (voxel) -- (guardado);
+
+% Dibujamos la flecha que conecta Fila 1 con Fila 2
+\draw[arrow] (guardado) -- (normales);
+
+% Dibujamos las flechas de la Fila 2
+\draw[arrow] (normales) -- (filtrado);
+\draw[arrow] (filtrado) -- (detector);
+
+
+\end{tikzpicture}
+}
+
+
+\caption{Diagrama de flujo del preprocesamiento. Los nodos en azul se sitúan en el ejecutable get\_pointclouds\_node y los amarillos en iss.}
+\label{fig:pipeline_registro}
+\end{figure}
+
+\subsection{Detección}
+En la fase de detección se predente encontrar puntos representativos de cada nube. Idealmente, los puntos deben ser esquinas o bordes, de forma que sean fácilmente reconobiles desde cualquier ángulo.
+
+En esta solución se experimentará principalmente con \textbf{ISS} (\textit{Intrinsic Shape Signatures}) \parencite[]{zhong2009intrinsic}. Este método se basa en estudiar cómo se distribuyen geométricamente los puntos vecinos alrededor de un candidato. El algoritmo dibuja una esfera virtual definida por el parámetro \texttt{SalientRadius} y analiza la forma que tienen los puntos dentro de ella. Si detecta que los puntos forman una pared plana o un tubo continuo, descarta el punto porque no aporta información única. A diferencia de Harris que utiliza las normales, ISS mira exclusivamente las coordeandas XYZ de cada punto.
+
+Adicionalmente, se probará con el detector \textbf{Harris 3D}. Es la adaptación al espacio tridimensional del detector de esquinas utilizado en imágenes 2D. En lugar de buscar cambios bruscos de color o luz, este método analiza cómo cambian las normales en el área que rodea a un punto. Si el algoritmo detecta que la superficie cambia de dirección bruscamente hacia varios lados a la vez (como ocurre en el pico de una mesa), lo marca como un \textit{keypoint} válido.
+    
+El ajuste exacto de estos parámetros internos, así como la comparativa de rendimiento y tiempos de ejecución entre ambos métodos, se detallará en la sección de Experimentación.
+
+
+
+\subsection{Descriptores}
+Una vez obtenidos los \textit{keypoints} de la toma, el siguiente paso es calcular sus \textbf{descriptores}. Un descriptor funciona como una firma o huella digital que describe la geometría exacta que rodea a ese punto. Son necesarios para hacer matching de keypoints, el sistema emparejará en primer lugar los puntos de cada par de nubes basándose en los descriptores.
+
+Para esta fase se ha optado por implementar \textbf{FPFH} (\textit{Fast Point Feature Histograms}) \parencite[]{rusu2009fast} en la versión que usa el detector ISS. Este método coge cada \textit{keypoint} y busca a sus vecinos dentro de un radio de búsqueda (utilizando un \texttt{KdTree} para agilizar el proceso). Una vez localizados, calcula las diferencias angulares entre las normales de todos esos puntos vecinos (de ahí la necesidad de haberlas calculado previamente en el preprocesamiento). Con estos ángulos, FPFH construye un histograma que resume cómo es la superficie local.
+
+En la versión con Harris se utilizará el detector \textbf{SHOT} (\textit{Signature of Histograms of OrienTations}) \parencite{tombari2010unique}. Este algoritmo divide el espacio al rededor del \textit{keypoint} en una esfera de 32 volúmenes. Para cada volumen se calcula un histograma de
+11 bins con el coseno entre las normales del keypoint y cada punto de la división. En total, el descriptor cuenta con 352 elementos, a diferencia de FPFH que genera 33. 
+
+
+\subsection{Emparejamiento y Filtrado (Matching y RANSAC)}
+Con los descriptores ya calculados para la toma anterior y la toma actual, se procede a la búsqueda de correspondencias o matching. Se compara cada descriptor de la nube $C_i$ con los de la nube $C_{i+1}$ y se emparejan los que coincidan. 
+
+Sin embargo, este proceso genera muchos falsos positivos (\textit{outliers}), emparejando puntos que realmente no corresponden a la misma parte de la casa. Para solucionar esto y limpiar las correspondencias, se utiliza el algoritmo \textbf{RANSAC} (\textit{Random Sample Consensus}) \parencite{fischler1981random}. Este método coge 3 correspondencias aleatorias (el mínimo matemático) para calcular la transformación entre ambas nubes. Es decir, queremos saber como modificar las coordenadas de los puntos de $C_i+1$ para que queden encima de los puntos de $C_i$. Después, RANSAC aplica esta transformación a las demás correspondencias, dependiendo de cuantas coincidan con la nueva transformación y el umbral que le hayamos indicado, devolverá un conjunto de inliers y una matriz de transformación.
+
+En este punto, se ha añadido un control de seguridad para evitar "saltos alucinados": si la distancia calculada es superior a $0.30$ metros, se considera una toma corrupta y se descarta la transformación para no romper el mapa.
+
+
+\subsection{Alineación Final y Mapeado (ICP)}
+Aunque RANSAC calcula una buena aproximación del movimiento, el ajuste entre las nubes no es perfecto. Para refinar la alineación, se utiliza el algoritmo \textbf{ICP} (\textit{Iterative Closest Point}). A este algoritmo se le pasa la nube de puntos y la matriz inicial calculada en el paso anterior. En la versión final se utilizó Generalized ICP, se detallará en la fase de experimentación.
+
+Una vez que ICP converge, devuelve la matriz de transformación local final. Dado que el robot Turtlebot3 navega sobre un plano bidimensional, en esta fase se aplican \textbf{restricciones de grados de libertad}. Se anulan artificialmente los movimientos imposibles para el robot. Es decir, en esta solución el robot solo tiene un grado de libertad (Rotación en y). Por tanto, todos los demás valores de la matriz de transformación, no serán correctos.
+
+Finalmente, esta transformación local limpia se multiplica por la transformación total acumulada, y la nube de puntos actual se proyecta y se \textbf{añade al mapa global}, repitiendo todo el ciclo con la siguiente toma capturada.
+
+
+\section{Experimentación}
+\subsection{Ajuste de parámetros}
+
+Para llegar a los valores óptimos de cada etapa del \textit{pipeline}, el sistema se sometió a un proceso iterativo de prueba y error, evaluando visual y computacionalmente el impacto de cada variable. 
+
+Durante este proceso, se observó que el registro 3D es extremadamente sensible a ciertos umbrales. Por ejemplo, al utilizar un radio de búsqueda (\texttt{SalientRadius}) muy elevado en el detector ISS o realizar las tomas cada más grados de giro. 
+
+De igual forma, un umbral muy permisivo en RANSAC generaba una gran cantidad de falsos positivos (\textit{outliers}), uniendo paredes que no correspondían y rompiendo el mapa global. En la Figura \ref{fig:tuning_proceso} se puede observar un ejemplo de las pruebas realizadas durante esta fase de ajuste.
+
+
+% --- CÓDIGO PARA PONER DOS FOTOS LADO A LADO ---
+\begin{figure}[H]
+    \centering
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{img/foto_error.png} 
+        \caption{Fallo en el registro debido a una mala parametrización.}
+    \end{minipage}\hfill
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{img/mal_matching.png} 
+        \caption{Matching muy malo debido a mal ajuste del detector.}
+    \end{minipage}
+    \label{fig:tuning_proceso}
+\end{figure}
+
+Un ajuste determinante para conseguir coherencia en la solución fue la restricción de los grados de libertad, concretamente las siguientes líneas:
+
+\begin{lstlisting}[style=cppstyle]
+Eigen::Matrix4f T_local = icp.getFinalTransformation(); 
+Eigen::Affine3f affine(T_local);
+float tx, ty, tz, rot_x, rot_y, rot_z;
+pcl::getTranslationAndEulerAngles(affine, tx, ty, tz, rot_x, rot_y, rot_z);
+
+// Anulamos movimientos imposibles para el Turtlebot SOLO TIENE UN GRADO DE LIBERTAD (ROTAR EN y)
+tx = 0.0; // No se desliza de lado
+ty = 0.0; // No vuela ni se hunde
+tz = 0.0; // No avanza ni retrocede
+rot_x = 0.0; // No mira hacia arriba/abajo (Cabeceo)
+rot_z = 0.0; // No ladea la cabeza (Alabeo)
+
+// Reconstruimos la matriz limpia
+Eigen::Affine3f affine_limpio = pcl::getTransformation(tx, ty, tz, rot_x, rot_y, rot_z);
+T_local = affine_limpio.matrix();
+ 
+T_total = T_total * T_local;
+\end{lstlisting}
+
+Esto permite que la reconstrucción siempre se realize sobre el mismo eje, evitando problemas como el suelo inclinado, o paredes más altas que en la realidad.
+
+Conseguir que los keypoints fuesen principalmente bordes y esquinas fue determinante para obtener un buen matching.
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{img/final_matching.png}
+    \caption{Matching final conseguido tras RANSAC (Extraído del vídeo citado en la introducción)}
+    \label{fig:placeholder}
+\end{figure}
+
+El último ajuste determinante fue el cambio de ICP a Generalized ICP (GICP) \parencite{segal2009generalized}, si bien penaliza enormemente el tiempo de ejecución, permitió arreglar los últimos errores que tenía la solución, como duplicidad en las paredes más lejanas, donde el error acumulado se hace más evidente.
+
+\begin{figure}[H]
+    \centering
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{img/sin_gicp.png} 
+        \caption{Resultado con ICP normal.}
+    \end{minipage}\hfill
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{img/imagen.png} 
+        \caption{Resultado final obtenido.}
+    \end{minipage}
+    \label{fig:resultado1}
+\end{figure}
+
+GICP es una versión avanzada que mejora la robustez del ajuste analizando la geometría local. A diferencia del ICP tradicional (que minimiza la distancia estricta de punto a punto), GICP calcula la matriz de covarianza de cada punto y sus vecinos, modelando las superficies como pequeños planos locales (alineación plano a plano). 
+
+En un entorno de interior estructurado como este, su ventaja clave es que permite que los puntos "deslicen" matemáticamente a lo largo de superficies lisas como las paredes o el suelo, penalizando únicamente los movimientos perpendiculares al plano. Esto no solo resolvió el problema de las paredes dobles, sino que aportó una gran estabilidad a la solución final, haciéndola constante y mucho menos dependiente de la aleatoriedad de la matriz inicial generada por RANSAC.
+
+Tras analizar estos comportamientos, se fijaron los parámetros definitivos que garantizan el mejor equilibrio entre precisión geométrica y tiempo de cómputo, los cuales se detallan en la Tabla \ref{tab:parametros}.
+
+\begin{table}[H]
+    \centering
+    % La "p{6cm}" hace que la última columna permita saltos de línea y tenga 6cm de ancho
+    \begin{tabular}{llcp{6cm}} 
+    \toprule
+    \textbf{Algoritmo} & \textbf{Parámetro} & \textbf{Valor Óptimo}  \\
+    \midrule
+    VoxelGrid & \texttt{LeafSize} & 0.02   \\
+    \addlinespace % Añade un pequeño espacio vertical para separar bloques
+    NormalEstimation & \texttt{RadiusSearch} & 0.1  \\
+    \addlinespace
+    ISS & \texttt{SalientRadius} & 0.15   \\
+    ISS & \texttt{NonMaxRadius} & 0.10   \\
+    \addlinespace
+    FPFH & \texttt{RadiusSearch} & 0.4 \\
+    \addlinespace
+    RANSAC & \texttt{InlierThreshold} & 0.10   \\
+    RANSAC & \texttt{MaximumIterations} & 50000 \\
+    \addlinespace
+    GICP & \texttt{MaxCorrespondenceDist} & 0.20   \\
+    GICP & \texttt{TransformationEpsilon} & $10^{-8}$ \\
+    GICP & \texttt{EuclideanFitnessEpsilon} & $10^{-2}$ \\
+    \bottomrule
+    \end{tabular}
+    \caption{Parámetros finales para cada etapa del pipeline.}
+    \label{tab:parametros}
+\end{table}
+
+Estos valores han permitido obtener el mejor resultado en términos de precisión y tiempo de cómputo. Gracias a esta configuración, el sistema es capaz de registrar las nubes de puntos de forma estable, logrando una reconstrucción global coherente de la casa, tal y como se puede observar en las Figuras 7 y \ref{fig:resultado2}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{img/imagen2.png}
+    \caption{Resultado final obtenido (II)}
+    \label{fig:resultado2}
+\end{figure}
+
+\subsection{Comparativa de métodos}
+
+Como se ha explicado anteriormente, se ha probado una versión alternativa con Harris 3D y SHOT. Con los siguientes paráemtros:
+\begin{table}[H]
+    \centering
+    % La "p{6cm}" hace que la última columna permita saltos de línea y tenga 6cm de ancho
+    \begin{tabular}{llcp{6cm}} 
+    \toprule
+    \textbf{Algoritmo} & \textbf{Parámetro} & \textbf{Valor Óptimo}  \\
+    \midrule
+    \addlinespace
+    HARRIS & \texttt{Radius} & 0.15   \\
+    HARRIS & \texttt{Threshold} & $10^{-6}$   \\
+    \addlinespace
+    SHOT & \texttt{RadiusSearch} & 0.4 \\
+    \bottomrule
+    \end{tabular}
+    \caption{Parámetros finales para cada etapa del pipeline.}
+    \label{tab:parametros}
+\end{table}
+
+Como se puede observar en la figura \ref{fig:Harris}. Los resultados obtenidos han sido notablemente peores, probablemente debido a que el esfuerzo principal fue hacer mejor la versión con ISS, por tanto, no se descarta que se pueda llegar a conseguir un resultado igual o mejor con Harris y SHOT.
+
+El error principal que se puede observar en la figura \ref{fig:Harris}, es la duplicidad de las paredes del fondo en el lado donde debería estar el sofá. Este error también se dio en la solución con ISS y es debido a que el ángulo de visión del sensor no llega a ver bordes del sofá en la parte más cercana al robot, generando una toma sin keypoints, lo que hace que el algoritmo se pierda.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{img/harris.png}
+    \caption{Resultado obtenido con harris}
+    \label{fig:Harris}
+\end{figure}
+
+\section{Conclusiones}
+
+En esta práctica se ha logrado implementar con éxito un \textit{pipeline} completo de registro de nubes de puntos 3D utilizando PCL y ROS, consiguiendo generar un mapa global coherente del entorno simulado del Turtlebot3.
+
+Durante el desarrollo, se ha evidenciado que el éxito del mapeado no depende exclusivamente de elegir el mejor algoritmo, sino de comprender la geometría del entorno y adaptar la matemática a las limitaciones físicas del robot. En este sentido, la anulación de los grados de libertad imposibles para el Turtlebot y el cambio a GICP (para aprovechar las superficies planas de la casa) fueron decisiones de diseño críticas que marcaron la diferencia entre un mapa distorsionado y una reconstrucción estable.
+
+Asimismo, la comparativa entre detectores demostró la enorme sensibilidad de estos sistemas a la parametrización. Aunque la dupla ISS y FPFH ofreció los mejores resultados para esta configuración específica, también se identificaron los puntos ciegos del sistema, como la pérdida de odometría visual en zonas sin características geométricas fuertes (como la esquina del sofá).
+
+Como trabajo futuro o posibles mejoras al sistema actual, se propone realizar un ajuste más fino de la alternativa con Harris 3D y SHOT, así como la posible implementación de un algoritmo de cierre de bucle (\textit{Loop Closure}) que permita corregir la deriva acumulada al completar el giro de 360 grados.
+
+%
+%\begin{terminal}[Despliegue]{}
+%
+%\end{terminal}
+%
+%\begin{lstlisting}[style=cppstyle]
+%
+%\end{lstlisting}
+
+%Ejemplo de citado apa \parencite{apache_kafka} 
+
+
+\newpage
+\section{ANEXO: Instrucciones de ejecución}
+
+Deben existir los archivos en \texttt{/home/ros2\_ws/src/get\_pointclouds/src} : \texttt{harris.cpp, iss.cpp, ver\_mapa.cpp}.
+
+\begin{terminal}[Dentro del contenedor de ROS]{}
+mkdir -p /home/ros2_ws/src/nubes/scenes
+colcon build --packages-select get_pointclouds send_velocity_commands
+source install/setup.bash
+ros2 launch turtlebot_gazebo_multiple create_multi_robot.launch.py
+ros2 run get_pointclouds get_pointclouds_node
+ros2 run send_velocity_commands driver_node
+\end{terminal}
+
+Se tomarán los puntos y se guardarán en el directorio nubes. Que el driver\_node de una vuelta completa de 360 grados \textbf{depende de la máquina donde se ejecute}, se puede ajustar el tiempo en la línea 36 del archivo \texttt{/home/ros2\_ws/src/send\_velocity\_commands/src/main.cpp}.
+
+\begin{terminal}[Ejecución del algoritmo]{}
+ros2 run get_pointclouds iss
+ros2 run get_pointclouds harris
+ros2 run get_pointclouds ver_mapa
+\end{terminal}
+
+El ejecutable \texttt{ver\_mapa} visualiza el mapa llamando \texttt{MAPA\_FINAL.pcd}, que lo crea el ejecutable iss, el ejecutable harris lo crea con otro nombre, si se quiere visualizar, se deberá renombrar. 
+
+\newpage
+\printbibliography
+
+\end{document}
